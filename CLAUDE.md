@@ -35,28 +35,40 @@ Concrete_Compressive_Strength/
 │   └── readme                  # Documentation projet
 ├── notebooks/                  # Jupyter Notebooks (livrable principal)
 ├── syntheses/
-│   └── arnaud/                 # Résumés de cours (Markdown)
-│       ├── 1_ML_Basics.md
-│       ├── 2_Regression_Supervise.md
-│       ├── 3_Classification_Supervise.md
-│       ├── 4 _Evaluation_de_performance.md
-│       ├── 5_k-NN.md
-│       ├── 6_Arbre_Classification_et_Regression.md
-│       ├── 7_Random_Forest.md
-│       ├── 8_Neural_Networks.md
-│       ├── 9_Tuning.md
-│       └── 10_Nested_Resampling.md   # CRITIQUE pour ce projet
+│   ├── arnaud/                 # Résumés de cours (Markdown)
+│   │   ├── 1_ML_Basics.md
+│   │   ├── 2_Regression_Supervise.md
+│   │   ├── 3_Classification_Supervise.md
+│   │   ├── 4 _Evaluation_de_performance.md
+│   │   ├── 5_k-NN.md
+│   │   ├── 6_Arbre_Classification_et_Regression.md
+│   │   ├── 7_Random_Forest.md
+│   │   ├── 8_Neural_Networks.md
+│   │   ├── 9_Tuning.md
+│   │   └── 10_Nested_Resampling.md   # CRITIQUE pour ce projet
+│   └── tim/                    # Résumés de cours (Markdown)
+│       ├── 1.ML_Basics.md
+│       ├── 2.Supervised_Regression.md
+│       ├── 3.Supervised_Classification.md
+│       ├── 4.Performance_Evaluation.md
+│       ├── 5.KNN.md
+│       ├── 6.Classification_&_Régression_Trees9.md
+│       ├── 7.Random_Forests.md
+│       ├── 8.Neural_Networks.md
+│       ├── 8.1.Deep_Learning.md
+│       └── 9.Tuning.md
 └── .python-version
 ```
 
 ## Sources à consulter en priorité
 
 1. **`syntheses/arnaud/10_Nested_Resampling.md`** — référence principale sur la nested CV
-2. **`syntheses/arnaud/9_Tuning.md`** — hyperparameter tuning (GridSearch, RandomSearch)
-3. **`syntheses/arnaud/2_Regression_Supervise.md`** — bases de la régression supervisée
-4. **`syntheses/arnaud/7_Random_Forest.md`** — Random Forest pour la régression
-5. **`syntheses/arnaud/4 _Evaluation_de_performance.md`** — métriques d'évaluation
-6. **Cours I2ML** (GitHub public) : `https://github.com/slds-lmu/lecture_i2ml`
+2. **`syntheses/arnaud/9_Tuning.md`** / **`syntheses/tim/9.Tuning.md`** — hyperparameter tuning (GridSearch, RandomSearch)
+3. **`syntheses/arnaud/2_Regression_Supervise.md`** / **`syntheses/tim/2.Supervised_Regression.md`** — bases de la régression supervisée
+4. **`syntheses/arnaud/7_Random_Forest.md`** / **`syntheses/tim/7.Random_Forests.md`** — Random Forest pour la régression
+5. **`syntheses/arnaud/4 _Evaluation_de_performance.md`** / **`syntheses/tim/4.Performance_Evaluation.md`** — métriques d'évaluation
+6. **`syntheses/tim/8.Neural_Networks.md`** / **`syntheses/tim/8.1.Deep_Learning.md`** — réseaux de neurones (complément)
+7. **Cours I2ML** (GitHub public) : `https://github.com/slds-lmu/lecture_i2ml`
    - Exercices nested resampling : `exercises/nested-resampling/`
    - Exercices évaluation : `exercises/evaluation/`
    - Exercices régression : `exercises/supervised-regression/`
@@ -77,7 +89,7 @@ Concrete_Compressive_Strength/
 - Justifier les choix d'hyperparamètres et de learners en lien avec les synthèses de cours
 - Privilégier la correction méthodologique sur la performance brute des modèles
 - Garder les grilles de recherche compactes pour des temps d'exécution raisonnables
-- Référencer les synthèses de cours (`syntheses/arnaud/`) quand elles sont pertinentes
+- Référencer les synthèses de cours (`syntheses/arnaud/` et `syntheses/tim/`) quand elles sont pertinentes
 - La Model Card doit suivre le framework Mitchell et al. (2019)
 
 ## Rappel workflow nested CV (sklearn)
