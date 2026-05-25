@@ -1,100 +1,159 @@
-# Fiche 10 — Interpretabilité & Specialized Focus
+# Fiche 10 — Interprétabilité & Specialized Focus
 
-> Synthèse 1 — ML Basics (Prédiction vs Explication)
+> Synthèse 1 — Prédiction vs Explication. Pourquoi l'interprétabilité est critique en génie civil.
 
 ---
 
-## Prédiction vs Explication (Synthèse 1)
+## Prédiction vs Explication — La Distinction Fondamentale
+
+```mermaid
+graph TD
+    OBJ["Pourquoi apprendre f(x) → y ?"] --> PRED["🎯 PRÉDICTION\n(boîte noire OK)"]
+    OBJ --> EXPL["🔬 EXPLICATION\n(reverse engineering)"]
+
+    PRED --> P1["On se fiche du 'comment'\nle modèle fonctionne"]
+    PRED --> P2["Ce qui compte :\nprécision sur nouvelles données"]
+    PRED --> P3["Ex: recommandation Netflix\nfilter spam emails"]
+
+    EXPL --> E1["Le modèle = outil pour\ncomprendre la réalité"]
+    EXPL --> E2["On décortique le modèle\npour trouver des insights"]
+    EXPL --> E3["Ex: quelles variables influencent\nle plus le risque cardiaque ?"]
+```
 
 | Objectif | Question posée | Modèle adapté |
 |---|---|---|
 | **Prédiction** | Quelle résistance pour cette formulation ? | N'importe lequel — même boîte noire |
-| **Explication** | Pourquoi cette formulation est-elle résistante ? Quel ingrédient ajuster ? | Modèle interprétable |
-
-**Dans la construction, on veut les DEUX.**
-
-Un ingénieur civil ne veut pas juste "42 MPa". Il veut savoir : *"Si j'augmente le ciment de 50 kg/m³, est-ce que je compense la réduction d'eau ?"*
+| **Explication** | Pourquoi cette formulation est-elle résistante ? Quel ingrédient ajuster ? | Modèle interprétable obligatoire |
 
 ---
 
-## Pourquoi l'interprétabilité est critique en génie civil
+## Dans la Construction, On Veut Les DEUX
 
-1. **Sécurité** : un modèle qu'un ingénieur ne peut pas expliquer à son client ou au bureau de contrôle n'est pas utilisable.
-2. **Formulation** : on veut comprendre l'impact de chaque ingrédient pour optimiser la formule.
-3. **Réglementation** : les normes EN 206 demandent des justifications, pas des boîtes noires.
+Un ingénieur civil ne veut pas juste *"42 MPa"*. Il veut savoir :
+
+> *"Si j'augmente le ciment de 50 kg/m³, est-ce que je compense la réduction d'eau ? Est-ce que le laitier joue vraiment un rôle à 28 jours ou seulement à long terme ?"*
+
+**3 raisons pour lesquelles l'interprétabilité est critique en génie civil :**
+
+1. **Sécurité :** un modèle qu'un ingénieur ne peut pas expliquer à son client ou au bureau de contrôle n'est pas utilisable. La norme EN 206 exige des justifications.
+2. **Formulation :** on veut comprendre l'impact de chaque ingrédient pour **optimiser** la formule (réduire les coûts, réduire l'empreinte carbone).
+3. **Réglementation :** "notre IA a dit 42 MPa" n'est pas une justification valable pour une décision structurelle.
 
 ---
 
-## Pourquoi on a exclu les Neural Networks
+## Pourquoi on a Exclu les Réseaux de Neurones
 
 | Modèle | Interprétabilité | Performance | Décision |
 |---|---|---|---|
-| Ridge | ✅ Très haute (coefficients directs) | ⚠️ Baseline | ✅ Inclus |
-| Random Forest | ⚠️ Feature Importance | ✅ Bonne | ✅ Inclus |
-| Gradient Boosting | ⚠️ Feature Importance | ✅ Meilleure | ✅ Inclus |
-| **Neural Networks** | **❌ Boîte noire** | ✅✅ | **❌ Exclu** |
+| Ridge | ✅ Maximale (coefficients directs + / -) | ⚠️ Baseline (10.4 MPa) | ✅ Inclus |
+| Random Forest | ⚠️ Feature Importance | ✅ Bonne (4.9 MPa) | ✅ Inclus |
+| Gradient Boosting | ⚠️ Feature Importance | ✅ Meilleure (4.2 MPa) | ✅ Inclus |
+| **Neural Networks** | ❌ **Boîte noire complète** | ✅✅ (potentiellement meilleur) | **❌ Exclu** |
 
-→ On a sacrifié potentiellement quelques points de RMSE pour maintenir l'interprétabilité.
+**On a consciemment sacrifié** quelques points de RMSE potentiels pour maintenir l'interprétabilité.
+
+C'est un **choix justifiable** : dans un contexte de génie civil avec des enjeux de sécurité, un modèle opaque ne peut pas être validé.
 
 ---
 
-## Feature Importance — Comment ça marche
+## Feature Importance (RF et GB) — Comment ça Marche
 
-### Impurity Importance (RF/GB)
+### Impurity Importance (Méthode utilisée dans notre projet)
 
-**Cause** : mesure la somme des réductions de MSE obtenues quand la feature est utilisée pour un split, sur tous les arbres.
+**Principe :** à chaque fois qu'une feature est utilisée pour un split dans un arbre, elle réduit la MSE (ou "l'impureté") dans les nœuds enfants. La Feature Importance d'une feature = **somme de toutes ces réductions**, sur tous les nœuds, sur tous les arbres.
 
-**Résultats GB** :
+$$\text{FI}(j) = \sum_{\text{arbres}} \sum_{\text{nœuds utilisant } j} \Delta \text{MSE}(\text{nœud})$$
 
-| Feature | Importance | Physique |
-|---|---|---|
-| `age` | ~35% | Hydratation log — relation non-linéaire capturée par les arbres |
-| `cement` | ~29% | Liant principal — plus de ciment = plus de réactions |
-| `water` | ~11% | Loi de Féret — eau en excès = pores = fragilité |
-| `slag` | ~8.5% | Substitut liant lent |
-| `superplasticizer` | ~8.3% | Réducteur d'eau indirect |
-| `fine_agg` | ~4.5% | Remplissage |
-| `coarse_agg` | ~1.8% | Remplissage |
-| `fly_ash` | ~1.2% | Très faible concentration |
+Normalisé pour que toutes les importances somment à 1.
 
-**age + cement = ~64% de l'importance combinée** — cohérent avec la physique.
+**Résultats GB dans notre projet :**
+
+```mermaid
+graph LR
+    AGE["age\n35%\n⭐⭐⭐⭐⭐"] 
+    CEM["cement\n29%\n⭐⭐⭐⭐"]
+    WAT["water\n11%\n⭐⭐"]
+    SLA["slag\n8.5%\n⭐⭐"]
+    SP["superplasticizer\n8.3%\n⭐⭐"]
+    FIN["fine_agg\n4.5%\n⭐"]
+    COA["coarse_agg\n1.8%\n"]
+    FLY["fly_ash\n1.2%\n"]
+```
+
+**age + cement = ~64% de l'importance combinée.**
+
+---
 
 ### Limite de l'Impurity Importance
 
-> Synthèse 7 : *"Favorise les features continues à haute cardinalité"*
+> *"Favorise les features continues à haute cardinalité."* (Synthèse 7)
 
-Les features avec beaucoup de valeurs possibles (comme `cement`) peuvent être légèrement surévaluées par rapport à celles avec beaucoup de zéros (comme `fly_ash`).
+Les features avec beaucoup de valeurs possibles (comme `cement` qui varie de 102 à 540) peuvent être **légèrement surévaluées** par rapport aux features qui ont beaucoup de zéros (comme `fly_ash`).
 
-Solution plus robuste : **Permutation Feature Importance** (permuter les valeurs d'une feature et mesurer la dégradation du score).
+**Pourquoi ?** Une feature avec beaucoup de valeurs possibles est **candidate à plus de splits** → mécaniquement plus d'occasions de réduire la MSE.
 
----
-
-## Coefficients Ridge — L'interprétation la plus directe
-
-```
-cement  = +12.05  → le plus impactant positivement
-slag    = +8.40
-age     = +7.13
-water   = -3.37   → le seul négatif (loi de Féret)
-```
-
-**Pourquoi comparables** : le StandardScaler ramène tout à moyenne=0, std=1 → les coefficients sont en "unités d'écart-type", donc directement comparables.
-
-**Limite** : Ridge suppose des relations linéaires. `age` a une vraie relation logarithmique → le coefficient Ridge sous-estime l'impact réel de l'âge.
+**Solution plus robuste :** Permutation Feature Importance
+- On permute aléatoirement les valeurs d'une feature dans le test set
+- On mesure la dégradation du score
+- Une feature importante → sa permutation dégrade beaucoup le score
 
 ---
 
-## Le lien Feature Importance ↔ Physique du béton
+## Coefficients Ridge — L'Interprétation Directe
 
-**`age` domine** → hydratation progressive (la réaction ciment + eau continue des semaines après la coulée)  
-**`cement` fort** → plus de liant = plus de réactions = plus résistant  
-**`water` négatif** → loi de Féret (1897) : résistance ∝ 1/(eau/ciment)²  
-**`coarse_agg`, `fine_agg` faibles** → juste du remplissage, pas de contribution chimique
+Ridge donne quelque chose que RF et GB ne peuvent pas donner : une **direction** (+ ou -) pour chaque feature.
+
+```
+cement  = +12.05  → +1 std de ciment ↑ résistance de 12 MPa
+slag    = +8.40   → liant secondaire fort
+age     = +7.13   → hydratation progressive
+fly_ash = +5.35   → liant tertiaire
+superplasticizer = +1.68 → effet indirect (réduit l'eau)
+fine_agg = +1.32  → remplissage, peu d'effet
+coarse_agg = +1.10 → remplissage, peu d'effet
+water   = -3.37   → le seul négatif — loi de Féret ✅
+Intercept = 35.25 MPa → résistance de base moyenne
+```
+
+**Pourquoi ces coefficients sont comparables :** le StandardScaler ramène tout à μ=0, σ=1 → les coefficients sont en "unités d'écart-type" → directement comparables entre features d'échelles différentes.
+
+**Limite de Ridge :** la relation `age` est logarithmique en réalité. Ridge l'approxime par une droite → le coefficient +7.13 **sous-estime** l'impact réel de l'âge aux jeunes âges (< 28 jours) et **surestime** aux vieux âges (> 90 jours).
+
+---
+
+## Le Lien Feature Importance ↔ Physique du Béton
+
+| Feature | Importance GB | Explication Physique |
+|---|---|---|
+| `age` | **35%** | Hydratation progressive : réaction C+E continue des semaines. Relation non-linéaire **bien capturée** par les arbres. |
+| `cement` | **29%** | Liant principal : plus de ciment = plus de réactions = plus de cristaux = plus de résistance. Relation quasi-linéaire. |
+| `water` | **11%** | Loi de Féret (1897) : eau en excès → pores → fragilité. Effet non-linéaire (quadratique). |
+| `slag` | 8.5% | Liant secondaire lent : faible contribution à 28j, plus important à long terme. |
+| `superplasticizer` | 8.3% | Effet indirect : réduit la quantité d'eau nécessaire → résistance ↑. |
+| `fine_agg` | 4.5% | Remplissage chimiquement inerte. Peu d'impact sur la résistance. |
+| `coarse_agg` | 1.8% | Idem — squelette sans réaction chimique. |
+| `fly_ash` | 1.2% | Souvent = 0 dans le dataset → peu de données → faible importance apparente. |
+
+**Conclusion physique :**
 
 > *"Les Feature Importances confirment la physique du béton — ce n'est pas juste un modèle qui marche, c'est un modèle qui a appris des lois physiques réelles."*
+
+**age + cement dominent** → cohérent avec le fait que le béton, c'est fondamentalement de l'eau + du ciment + du temps.
+
+---
+
+## Réponse à "Pourquoi Pas les Réseaux de Neurones ?" (Question Probable)
+
+Structure de réponse en 3 points :
+
+1. **Objectif du projet :** on veut à la fois **prédire** ET **expliquer** (Specialized Focus du cours). Les réseaux de neurones sont des boîtes noires — on ne peut pas expliquer pourquoi ils prédisent 42 MPa.
+
+2. **Contexte applicatif :** en génie civil, un ingénieur doit justifier ses choix de formulation à un bureau de contrôle. "L'IA a dit" n'est pas une justification. Ridge donne des coefficients directs, GB donne des Feature Importances — tous deux exploitables.
+
+3. **Performance vs interprétabilité :** GB (4.2 MPa) est déjà excellent. Le gain potentiel d'un réseau de neurones serait marginal sur 1005 observations — pas suffisant pour justifier la perte d'interprétabilité.
 
 ---
 
 ## À retenir pour l'oral
 
-> *"On a exclu les réseaux de neurones parce que l'interprétabilité est critique en génie civil — un ingénieur doit pouvoir expliquer ses choix de formulation à un bureau de contrôle. On a Ridge pour l'interprétabilité maximale (coefficients directs), et Feature Importance pour RF/GB. Le fait que `age` et `cement` dominent à 64% confirme que notre modèle a bien appris les lois physiques de l'hydratation et du dosage."*
+> *"On a exclu les réseaux de neurones parce que l'interprétabilité est critique en génie civil — un ingénieur doit pouvoir expliquer ses choix de formulation à un bureau de contrôle. On a Ridge pour l'interprétabilité maximale (coefficients directs avec signe), et Feature Importance pour RF/GB. Le fait que `age` et `cement` dominent à 64% confirme que notre modèle a bien appris les lois physiques de l'hydratation et du dosage — c'est notre 'Specialized Focus' : relier les résultats ML à la physique du béton."*

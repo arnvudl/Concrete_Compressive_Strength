@@ -1,112 +1,141 @@
-# Fiche 5 — Nested Cross-Validation
+# Fiche 05 — Nested Cross-Validation
 
-> Synthèse 10 — Nested Resampling + Synthèse 9 — Tuning
-
----
-
-## Le problème : pourquoi une simple CV ne suffit pas ?
-
-**Situation** : tu tunes 50 valeurs d'alpha avec une 5-fold CV. Tu gardes l'alpha qui a le meilleur score.
-
-**Cause du problème** : tu ne prends pas la **moyenne** des 50 scores, tu prends le **minimum**. Le minimum d'une distribution bruitée est toujours **trop bas** (trop optimiste).
-
-**Preuve par l'absurde** (synthèse 10) : classifieur binaire **aléatoire** (GE réelle = 50%).
-- 1 run CV → score ≈ 50% ✅
-- Avec 100 configs tunées, le "meilleur" score descend à ~38% 🚨
-- Le modèle semble meilleur de 12 points alors qu'il est **purement aléatoire**
-
-**Plus de configs testées + dataset plus petit = biais plus grand**
+> Synthèse 10 — Le problème de l'overtuning et sa solution.
 
 ---
 
-## L'analogie de la loot box (synthèse 10)
+## Le Problème : Pourquoi Une Simple CV Ne Suffit Pas ?
 
-Tu ouvres 100 loot boxes dans un jeu. Par chance, une te donne +5% de stats.  
-Si tu annonces "+5% de stats", tu **mens** — c'est du cherry-picking sur 100 tirages, pas de la vraie puissance.
+Scénario : tu testes 72 combinaisons d'hyperparamètres avec une 5-fold CV. Tu gardes la combinaison avec le meilleur score. Ce score est-il une estimation honnête de la GE réelle ?
 
-→ Tuner sans test set séparé, c'est exactement ça.
+**Non. Il est biaisé optimistement.**
+
+**Pourquoi ?** Tu ne prends pas la *moyenne* des 72 scores — tu prends le **minimum**. Le minimum d'une distribution bruitée est *toujours* trop bas par chance.
 
 ---
 
-## La solution : deux boucles séparées
+## L'Analogie de la Loot Box (Synthèse 10)
 
+Imagine que tu ouvres **100 loot boxes** dans un jeu. Par chance, une te donne +5% de stats.
+
+Si tu annonces *"ce jeu donne +5% de stats"*, tu **mens** — c'est du cherry-picking sur 100 tirages aléatoires. La vraie valeur attendue est beaucoup moins.
+
+**Tuner sans test set séparé, c'est exactement ça.** Tu ouvres 72 "boîtes" (configurations HP), tu annonces la meilleure par chance.
+
+---
+
+## Preuve par l'Absurde (Synthèse 10)
+
+Prends un **classifieur binaire aléatoire** : il prédit au hasard, donc sa vraie GE = 50% d'erreur. Maintenant :
+
+| Expérience | Score observé | Réalité |
+|---|---|---|
+| 1 config testée, 5-fold CV | ≈ 50% ✅ | Honnête |
+| 100 configs testées, simple CV | ≈ 38% 🚨 | Biaisé de -12 points ! |
+| 100 configs testées, **nested CV** | ≈ 50% ✅ | Toujours honnête |
+
+**Loi :** plus on teste de configurations, plus le biais est grand.
+
+---
+
+## La Solution : Deux Boucles Séparées
+
+```mermaid
+graph TD
+    DS["Dataset complet\n1005 obs"] --> OUTER["BOUCLE EXTERNE — outer_cv\nKFold(5, shuffle=True, random_state=0)\n→ estimation GE NON BIAISÉE"]
+    
+    OUTER --> |"fold externe 1"| OT1["TEST EXTERNE\n201 obs\nJamais vu pendant le tuning"]
+    OUTER --> |"fold externe 1"| OTR1["TRAIN EXTERNE\n804 obs"]
+    
+    OTR1 --> INNER["BOUCLE INTERNE — inner_cv\nKFold(5, shuffle=True, random_state=42)\n→ GridSearchCV : trouver λ*"]
+    
+    INNER --> |"72 configs × 5 folds"| BEST["Meilleurs HPs λ*\nEx: lr=0.2, depth=4"]
+    
+    BEST --> RETRAIN["Ré-entraîner sur\nTRAIN EXTERNE complet\navec λ*"]
+    
+    RETRAIN --> EVAL["Évaluer sur\nTEST EXTERNE\n→ Score non biaisé E1"]
+    
+    EVAL --> FINAL["Répéter 5 fois\nGE_hat = mean(E1...E5)"]
 ```
-BOUCLE EXTERNE (outer_cv — 5 folds)
-│
-│  Pour chaque fold externe :
-│  ├─ Isoler le TEST EXTERNE → jamais touché pendant le tuning
-│  │
-│  └─ BOUCLE INTERNE (inner_cv — 5 folds) sur TRAIN EXTERNE
-│     ├─ Tester chaque combinaison d'HPs via GridSearchCV
-│     └─ Garder le meilleur λ*
-│
-│  ├─ Ré-entraîner avec λ* sur tout le TRAIN EXTERNE
-│  └─ Évaluer sur TEST EXTERNE → score non biaisé
-│
-└─ RÉSULTAT : 5 scores outer → moyenne = GE estimée
-```
 
-**Garantie** : le test externe n'a **jamais** participé au tuning interne → score non biaisé.
+**Garantie fondamentale :** le TEST EXTERNE n'a **jamais** participé au tuning interne → score non biaisé.
 
 ---
 
-## Implémentation sklearn — Une seule ligne
+## Implémentation sklearn — Une Seule Ligne
 
 ```python
-cross_val_score(           # ← BOUCLE EXTERNE
-    estimator = GridSearchCV(  # ← BOUCLE INTERNE
-        pipe,
-        param_grid,
-        cv = inner_cv      # KFold(5, shuffle=True, random_state=42)
-    ),
-    cv = outer_cv          # KFold(5, shuffle=True, random_state=0)
-)
+from sklearn.model_selection import KFold, GridSearchCV, cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import GradientBoostingRegressor
+import numpy as np
+
+# 1. Pipeline : preprocessing + modèle
+pipe = Pipeline([
+    ('scaler', StandardScaler()),
+    ('model', GradientBoostingRegressor(random_state=42))
+])
+
+# 2. Grille d'hyperparamètres (préfixe model__ obligatoire)
+param_grid = {
+    'model__n_estimators': [100, 200, 300],
+    'model__learning_rate': [0.01, 0.05, 0.1, 0.2],
+    'model__max_depth': [3, 4, 5],
+    'model__subsample': [0.8, 1.0]
+}
+
+# 3. Boucle interne : tuning HP
+inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
+search = GridSearchCV(pipe, param_grid, cv=inner_cv,
+                      scoring='neg_mean_squared_error', n_jobs=-1)
+
+# 4. Boucle externe : estimation GE ← UNE SEULE LIGNE
+outer_cv = KFold(n_splits=5, shuffle=True, random_state=0)
+outer_scores = cross_val_score(search, X, y, cv=outer_cv,
+                               scoring='neg_mean_squared_error')
+
+# 5. Conversion en RMSE
+rmse = np.sqrt(-outer_scores)
+print(f"RMSE: {rmse.mean():.3f} ± {rmse.std():.3f} MPa")
+# → GB: 4.208 ± 0.261 MPa
 ```
 
-`GridSearchCV` est passé comme **estimateur** à `cross_val_score` → sklearn gère tout automatiquement.
+**La magie sklearn :** `GridSearchCV` est passé comme **estimateur** à `cross_val_score`. Sklearn comprend qu'il faut refaire le tuning à chaque fold externe → les deux boucles sont gérées automatiquement.
 
 ---
 
-## Coût computationnel
+## Réinterprétation Architecturale (Synthèse 10)
 
-Pour 1 modèle (ex. RF, 72 combos) :
-- 5 folds outer × 5 folds inner × 72 combos = **1 800 entraînements**
+Le processus `[Run CV interne → sélectionner λ* → ré-entraîner]` est un **algorithme auto-tunant**.
+- Ses inputs = les données brutes
+- Son output = un modèle optimisé
+- Les hyperparamètres ont **disparu de l'interface** — résolus en interne
 
-C'est pour ça qu'on garde des grilles compactes (72 combos max) et qu'on utilise `n_jobs=-1` (parallélisation).
-
----
-
-## Preuve que ça marche (synthèse 10)
-
-- **Sans nested CV** : le score "tuned" descend vers 0.30-0.45 pour un classifieur aléatoire
-- **Avec nested CV** : le score reste stable autour de **0.50** (la vraie GE) — quelle que soit la quantité de configs testées
-
-Le nested CV corrige le biais. Il ne dit pas que le modèle est bon — il dit **honnêtement** ce qu'il vaut.
+La boucle externe évalue **cet algorithme complet**, pas juste le modèle final. On mesure : *"si je donne ce dataset à cet algorithme, quelle performance puis-je attendre sur de nouvelles données ?"*
 
 ---
 
-## Réinterprétation architecturale (synthèse 10)
+## Coût Computationnel
 
-Le processus `[Run CV interne → sélectionner λ* → ré-entraîner]` est un **algorithme self-tuning**.  
-Ses inputs = les données brutes.  
-Son output = un modèle.  
-Les HPs ont **disparu de l'interface visible** — résolus en interne.
+Pour 1 modèle (ex. GB, 72 combos) :
+$$5 \text{ folds outer} \times 5 \text{ folds inner} \times 72 \text{ combos} = \mathbf{1800} \text{ entraînements}$$
 
-La boucle externe évalue **cet algorithme complet**, pas juste le modèle final.
+Pour 3 modèles : ~5000+ entraînements → c'est pour ça qu'on utilise `n_jobs=-1` (parallélisation CPU) et des grilles compactes.
 
 ---
 
 ## Simple CV vs Nested CV
 
-| Critère | CV simple | Nested CV |
+| Critère | CV Simple | Nested CV |
 |---|---|---|
-| **Biais GE** | ❌ Optimiste (croît avec #configs) | ✅ Non biaisé |
-| **Variance** | ⚠️ Modérée | ✅ Réduite |
+| **Biais GE après tuning** | ❌ Optimiste (croît avec #configs) | ✅ Non biaisé |
+| **Datasets petits** | ❌ Biais fort | ✅ Conçu pour ça |
 | **Coût** | Faible | ❌ k_outer × k_inner × #configs |
-| **Petits datasets** | ❌ Biais fort | ✅ Conçu pour ça |
+| **Recommandé quand ?** | Exploration rapide | **Évaluation finale publiée** |
 
 ---
 
 ## À retenir pour l'oral
 
-> *"La simple CV ne suffit pas pour évaluer un modèle après tuning : on sélectionne le meilleur score parmi plusieurs évaluations, ce qui est optimistement biaisé. La nested CV résout ce problème en séparant strictement la boucle de tuning (inner) de la boucle d'évaluation (outer). Dans sklearn, c'est `cross_val_score(GridSearchCV(...))` — une seule ligne qui gère les deux boucles automatiquement."*
+> *"Une simple CV ne suffit pas pour évaluer un modèle après tuning : on sélectionne le minimum parmi plusieurs évaluations bruitées, ce qui est toujours trop optimiste — comme cherry-picker la meilleure loot box sur 100 tirages. La nested CV résout ce problème avec deux boucles séparées : la boucle interne tune les HPs, la boucle externe évalue la GE sur un test set jamais vu pendant le tuning. Dans sklearn, c'est `cross_val_score(GridSearchCV(...))` — une seule ligne. Coût : 1800 entraînements par modèle (5×5×72) — d'où l'importance de garder des grilles compactes."*

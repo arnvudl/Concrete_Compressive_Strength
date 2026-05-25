@@ -1,110 +1,175 @@
-# Fiche 4 — Hyperparamètres & Tuning
+# Fiche 04 — Hyperparamètres & Tuning
 
-> Synthèse 9 — Tuning
+> Synthèse 9 — Comment trouver les bons réglages d'un algorithme ?
 
 ---
 
-## Paramètres θ vs Hyperparamètres λ
+## Paramètres θ vs Hyperparamètres λ — La Distinction Fondamentale
+
+```mermaid
+graph TD
+    TRAIN["Entraînement\n.fit(X_train, y_train)"] --> PARAMS["Paramètres θ\nAPPRIS automatiquement\npar l'algorithme"]
+    
+    BEFORE["AVANT l'entraînement"] --> HP["Hyperparamètres λ\nFIXÉS manuellement\nou par tuning"]
+    
+    HP --> TRAIN
+    TRAIN --> PARAMS
+```
 
 | | Paramètres θ | Hyperparamètres λ |
 |---|---|---|
-| **Définition** | Appris automatiquement pendant l'entraînement | Fixés AVANT l'entraînement |
-| **Exemples** | Coefficients Ridge, poids d'un réseau | alpha de Ridge, n_estimators de RF |
-| **Comment les trouver** | Minimisation de la loss | Tuning (GridSearch, RandomSearch…) |
-| **Sklearn** | Appris par `.fit()` | Passés en argument au constructeur |
+| **Quand ?** | Pendant l'entraînement | **Avant** l'entraînement |
+| **Comment ?** | Minimisation automatique de la loss | Tuning (GridSearch, RandomSearch) |
+| **Exemples Ridge** | Coefficients `w₁, w₂, ..., w₈` | `alpha` (force de régularisation) |
+| **Exemples RF** | Seuils des splits dans chaque arbre | `n_estimators`, `max_depth` |
+| **Exemples GB** | Valeurs des feuilles | `learning_rate`, `max_depth`, `n_estimators` |
+| **Dans sklearn** | Appris par `.fit()` | Passés au constructeur `Ridge(alpha=1)` |
+
+**Analogie :** les paramètres = les muscles d'un sportif (développés à l'entraînement). Les hyperparamètres = le programme d'entraînement (réglé par le coach avant de commencer).
 
 ---
 
-## Pourquoi le tuning est difficile ?
+## Pourquoi le Tuning est Difficile ?
 
-4 propriétés fondamentales (synthèse 9) :
+4 propriétés qui rendent le tuning hard :
 
-| Propriété | Problème |
+| Propriété | Problème concret |
 |---|---|
-| **Boîte noire** | Pas de gradient ∇c(λ) disponible — on ne peut pas dériver |
-| **Coût élevé** | Chaque test = entraîner le modèle entier |
-| **Stochasticité** | Le score varie selon la partition du resampling |
-| **Structure complexe** | HPs dépendants entre eux (hiérarchique) |
+| **Boîte noire** | Pas de gradient $\nabla_\lambda$ disponible → pas de descente de gradient sur λ |
+| **Coût élevé** | Tester 1 configuration = entraîner le modèle entier (parfois plusieurs minutes) |
+| **Stochasticité** | Le score varie selon la partition aléatoire du resampling |
+| **Dépendances** | Les HPs sont liés entre eux (ex: si `learning_rate` petit → besoin de plus de `n_estimators`) |
 
 ---
 
-## Grid Search vs Random Search
+## Grid Search — Exhaustif sur une Grille
 
-### Grid Search
-Teste **toutes les combinaisons** d'une grille discrète.
+**Principe :** on définit une grille discrète de valeurs pour chaque HP, et on teste **toutes les combinaisons**.
 
-| RF | n_estimators=[100, 200, 300] | max_depth=[None, 10, 20, 30] | → 3×4=12 |
-Avec min_samples_split et min_samples_leaf → 3×4×3×2 = **72 combinaisons**
+```python
+param_grid_gb = {
+    'model__n_estimators': [100, 200, 300],          # 3 valeurs
+    'model__learning_rate': [0.01, 0.05, 0.1, 0.2],  # 4 valeurs
+    'model__max_depth': [3, 4, 5],                    # 3 valeurs
+    'model__subsample': [0.8, 1.0]                    # 2 valeurs
+}
+# Total : 3 × 4 × 3 × 2 = 72 combinaisons
+```
 
-**Avantage** : couvre tout exhaustivement.  
-**Limite** : exponentiel en nombre de HPs.
+```mermaid
+graph TD
+    GRID["Grille HP\n72 combinaisons GB"] --> EVAL["Pour chaque combinaison\nentraîner + évaluer\npar inner CV (5 folds)"]
+    EVAL --> BEST["Sélectionner la combinaison\navec meilleur RMSE inner"]
+```
 
-### Random Search
-Échantillonne aléatoirement dans l'espace continu.
+**Coût total :** 72 combinaisons × 5 folds inner = **360 entraînements** par outer fold.
 
-**Avantage clé** : si seul x1 influence vraiment la performance, Grid 5×5 = 5 valeurs de x1 testées. Random 25 évals = **25 valeurs distinctes** de x1.
+**Avantage :** explore exhaustivement toute la grille, résultats reproductibles.
 
-**Pourquoi on a choisi Grid Search** : nos grilles sont compactes (≤72 combinaisons) et discrètes. GridSearch explore tout exhaustivement, résultats reproductibles.
+**Limite :** exponentiel en nombre de HPs. 10 HPs avec 3 valeurs chacun = 3¹⁰ = 59 049 combos.
 
 ---
 
-## Nos hyperparamètres — Justification
+## Random Search — Pour de Grandes Grilles
 
-### Ridge : `alpha`
+**Principe :** au lieu de tester toutes les combinaisons, on tire aléatoirement `n_iter` configurations.
+
+**Avantage clé :** si seul 1 HP influence vraiment la performance :
+- Grid 5×5 → teste seulement **5 valeurs distinctes** du HP important
+- Random 25 → teste **25 valeurs distinctes** du HP important
+
+On a choisi **Grid Search** car nos grilles sont compactes (≤ 72 combos) → exploration exhaustive possible en temps raisonnable.
+
+---
+
+## Nos Hyperparamètres — Justification Physique et Théorique
+
+### Ridge — `alpha`
 ```python
 'model__alpha': [0.001, 0.01, 0.1, 1, 10, 100, 1000]
 ```
-- alpha contrôle la force de la régularisation L2
-- petit → proche OLS → risque overfitting
-- grand → coefficients très petits → risque underfitting
-- **Meilleur : alpha=1** (régularisation standard sklearn)
 
-### Random Forest
-```python
-'model__n_estimators': [100, 200, 300]        # plus = plus stable
-'model__max_depth': [None, 10, 20, 30]        # None = arbres complets
-'model__min_samples_split': [2, 5, 10]        # granularité des splits
-'model__min_samples_leaf': [1, 2]             # taille minimale des feuilles
-```
-- **Meilleur : max_depth=20, n_estimators=300, min_samples_leaf=1, min_samples_split=2**
-- max_depth=None ou 20 → le bagging compense l'overfitting de chaque arbre
+`alpha` contrôle la **force de régularisation L2** :
+- `alpha` → 0 : pas de pénalité → OLS pur → risque d'overfitting avec multicolinéarité
+- `alpha` → ∞ : tous les coefficients → 0 → modèle constant → underfitting
 
-### Gradient Boosting
-```python
-'model__n_estimators': [100, 200, 300]        # nombre d'arbres séquentiels
-'model__learning_rate': [0.01, 0.05, 0.1, 0.2] # α de la descente de gradient
-'model__max_depth': [3, 4, 5]                 # arbres courts = apprenants faibles
-'model__subsample': [0.8, 1.0]               # Stochastic GB
-```
-- **Meilleur : learning_rate=0.2, max_depth=4, n_estimators=300, subsample=1.0**
-- max_depth petit (3-5) = recommandé pour GB → chaque arbre est un "apprenant faible"
+**Meilleur alpha = 1** : régularisation modérée standard.
 
 ---
 
-## Le préfixe `model__` dans sklearn Pipeline
-
+### Random Forest — 4 HPs
 ```python
-# ❌ Sans pipeline
-param_grid = {'alpha': [0.1, 1, 10]}
-
-# ✅ Avec Pipeline
-param_grid = {'model__alpha': [0.1, 1, 10]}
+'model__n_estimators': [100, 200, 300]     # Nombre d'arbres
+'model__max_depth': [None, 10, 20, 30]     # Profondeur max de chaque arbre  
+'model__min_samples_split': [2, 5, 10]     # Nb min d'obs pour splitter un nœud
+'model__min_samples_leaf': [1, 2]          # Nb min d'obs dans une feuille
 ```
 
-**Cause** : le Pipeline a plusieurs étapes (`scaler`, `model`). Il faut préciser à quelle étape appartient chaque HP. Le préfixe = nom de l'étape + `__` + nom du paramètre.
+| HP | Rôle | Meilleur |
+|---|---|---|
+| `n_estimators` | Plus = plus stable, mais diminishing returns | **300** |
+| `max_depth` | `None` = arbres complets (OK car bagging compense) | **20** |
+| `min_samples_split` | Régularisation douce | **2** |
+| `min_samples_leaf` | Régularisation douce | **1** |
+
+**Meilleur RF : max_depth=20, n_estimators=300, min_samples_leaf=1, min_samples_split=2**
 
 ---
 
-## Le problème de l'overtuning (synthèse 10)
+### Gradient Boosting — 4 HPs
+```python
+'model__n_estimators': [100, 200, 300]          # Nombre d'arbres séquentiels
+'model__learning_rate': [0.01, 0.05, 0.1, 0.2]  # Contribution de chaque arbre
+'model__max_depth': [3, 4, 5]                    # Arbres courts = "apprenants faibles"
+'model__subsample': [0.8, 1.0]                   # Fraction données par arbre (stochastic GB)
+```
 
-**Cause** : si on tune sur les mêmes données qu'on évalue, on sélectionne le **minimum** d'une distribution bruitée. Ce minimum est **toujours trop optimiste**.
+| HP | Rôle | Meilleur |
+|---|---|---|
+| `n_estimators` | Nombre d'étapes de boosting | **300** |
+| `learning_rate` | Combien chaque arbre corrige (petit = plus conservateur) | **0.2** |
+| `max_depth` | GB recommande des arbres courts (3-5) | **4** |
+| `subsample` | Stochastic GB (variance ↓) | **1.0** (pas de subsampling) |
 
-**Exemple** : classifieur aléatoire (GE réelle = 50%), 100 configs testées → le "meilleur" score CV descend à 38% → on croit avoir un bon modèle alors qu'il est aléatoire.
+**Règle learning_rate / n_estimators :** ces deux HPs sont liés.
+- `learning_rate` petit (0.01) → besoin de beaucoup d'arbres (>500) pour converger → lent
+- `learning_rate=0.2` (élevé) + 300 arbres = bon compromis vitesse/performance
 
-**Plus on teste de configs, plus le biais est grand.** C'est pour ça qu'il faut la **nested CV**.
+**Meilleur GB : learning_rate=0.2, max_depth=4, n_estimators=300, subsample=1.0**
+
+---
+
+## Le Préfixe `model__` — Obligatoire dans un Pipeline
+
+Quand on utilise un `sklearn.pipeline.Pipeline`, chaque étape a un nom (`scaler`, `model`, etc.). Pour passer des HPs à GridSearchCV, il faut préciser **à quelle étape** appartient chaque HP :
+
+```python
+# Pipeline :
+pipe = Pipeline([('scaler', StandardScaler()), ('model', GradientBoostingRegressor())])
+
+# ❌ Sans préfixe → ERREUR (GridSearch ne sait pas où mettre n_estimators)
+param_grid = {'n_estimators': [100, 300]}
+
+# ✅ Avec préfixe → correct
+param_grid = {'model__n_estimators': [100, 300],
+              'model__learning_rate': [0.1, 0.2]}
+# Format : 'nom_etape__nom_parametre'
+```
+
+---
+
+## Le Problème de l'Overtuning (Preview Fiche 05)
+
+**Cause :** si on tune sur les mêmes données qu'on évalue, on sélectionne le **minimum par chance** dans une distribution bruitée.
+
+**Exemple :** un classifieur aléatoire (GE réelle = 50%), si on teste 100 configs → la "meilleure" aura peut-être 38% d'erreur sur ce CV par chance → **on croit avoir un bon modèle**.
+
+**Plus on teste de configs, plus le biais est grand.**
+
+→ Solution : la **Nested Cross-Validation** (Fiche 05).
 
 ---
 
 ## À retenir pour l'oral
 
-> *"Les hyperparamètres ne sont pas appris par le modèle — on doit les fixer avant. On utilise GridSearchCV car nos grilles sont compactes. Le préfixe `model__` est obligatoire dans un Pipeline sklearn pour cibler la bonne étape. On a choisi des grilles raisonnables : 72 combos pour RF et GB, ce qui représente ~1800 entraînements par modèle avec la nested CV."*
+> *"Les hyperparamètres ne sont pas appris par le modèle — on doit les fixer avant l'entraînement. On utilise GridSearchCV car nos grilles sont compactes (≤72 combos). Le préfixe `model__` est obligatoire dans un Pipeline sklearn pour cibler la bonne étape. Pour GB, learning_rate=0.2 et n_estimators=300 sont liés — un learning rate élevé permet de converger en moins d'arbres. Si on tunait sur les mêmes données qu'on évalue, on biaiserait l'estimation (overtuning) — c'est pour ça qu'on utilise une nested CV."*
