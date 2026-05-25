@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concrete Strength — ML Visualizer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-logo">
+    <h2>🧱 CONCRETE ML</h2>
+    <p>Visualiseur interactif — I2ML 2026</p>
+  </div>
+
+  <a href="#intro"      class="active"><span class="nav-icon">🏠</span> Accueil</a>
+  <a href="#ridge">     <span class="nav-icon">📉</span> Ridge & L2</a>
+  <a href="#cv">        <span class="nav-icon">🔄</span> Cross-Validation</a>
+  <a href="#nested">    <span class="nav-icon">🎯</span> Nested CV</a>
+  <a href="#leakage">   <span class="nav-icon">🚰</span> Data Leakage</a>
+  <a href="#importance"><span class="nav-icon">📊</span> Feature Importance</a>
+  <a href="#comparison"><span class="nav-icon">🏆</span> Comparaison</a>
+
+  <div class="nav-footer">
+    <div class="theme-toggle">
+      <span>Mode sombre</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="theme-toggle">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════════ -->
+<main>
+
+  <!-- ── INTRO ── -->
+  <section id="intro">
+    <div class="sh-tag">I2ML — Concrete Compressive Strength</div>
+    <h1 class="sh-title">ML Visualizer Interactif</h1>
+    <p class="sh-desc">Explore les concepts clés du projet : régularisation Ridge avec slider alpha, k-fold CV animée, nested CV étape par étape, data leakage, et feature importance. Toutes les valeurs sont issues du projet réel.</p>
+
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--ridge)">10.4 MPa</div>
+        <div class="stat-label">RMSE Ridge baseline</div>
+        <div class="stat-sub">R² = 0.590</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--rf)">4.9 MPa</div>
+        <div class="stat-label">RMSE Random Forest</div>
+        <div class="stat-sub">R² = 0.907</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--gb)">4.2 MPa</div>
+        <div class="stat-label">RMSE Gradient Boosting ⭐</div>
+        <div class="stat-sub">R² = 0.932</div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:16px">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--accent4)">1 005</div>
+        <div class="stat-label">Observations (après nettoyage)</div>
+        <div class="stat-sub">−25 doublons de 1 030</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--accent3)">8</div>
+        <div class="stat-label">Features (kg/m³ + jours)</div>
+        <div class="stat-sub">Toutes continues, aucune catégorielle</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--accent)">1 800</div>
+        <div class="stat-label">Entraînements par modèle</div>
+        <div class="stat-sub">5 outer × 72 combos × 5 inner</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── RIDGE & L2 ── -->
+  <section id="ridge">
+    <div class="sh-tag">Modèle 1 — Baseline</div>
+    <h2 class="sh-title">Ridge & Régularisation L2</h2>
+    <p class="sh-desc">Ridge ajoute une pénalité sur les grands coefficients (L2) pour gérer la multicolinéarité entre <code>water</code> et <code>superplasticizer</code> (r ≈ −0.66). Déplace le curseur pour voir comment α affecte les coefficients et le RMSE.</p>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="slider-wrap">
+        <div class="slider-label">
+          <span>Hyperparamètre α &nbsp;—&nbsp; échelle logarithmique</span>
+          <strong id="alpha-val">α = 1.0</strong>
+        </div>
+        <input type="range" id="alpha-slider" min="0" max="100" value="43" step="1">
+        <div class="slider-ticks">
+          <span>0.001 (OLS pur)</span>
+          <span>0.1</span>
+          <span>10</span>
+          <span>1 000</span>
+          <span>10 000</span>
+        </div>
+      </div>
+      <div id="ridge-msg" class="info-box" style="margin-top:14px"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Regularization Path — tous les coefficients vs α</div>
+      <div class="svg-chart-wrap" id="reg-path-svg"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">RMSE cross-validation vs α</div>
+        <div class="svg-chart-wrap" id="rmse-alpha-svg"></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:10px">
+        <div class="card-title">Interprétation physique</div>
+        <div class="info-box">
+          <strong>cement (+12.05) :</strong> plus de liant = plus de réactions d'hydratation = béton plus résistant.
+        </div>
+        <div class="warn-box">
+          <strong>water (−3.37) :</strong> seul coefficient négatif. Loi de Féret (1897) : résistance ∝ 1/(eau/ciment)². L'eau en excès crée des pores.
+        </div>
+        <div class="ok-box">
+          <strong>StandardScaler obligatoire :</strong> ramène tout à μ=0, σ=1. Sans ça, la pénalité L2 est injuste (cement en kg/m³ vs age en jours).
+        </div>
+        <div class="info-box" style="margin-top:auto">
+          <strong>Limite de Ridge :</strong> RMSE = 10.4 MPa car les relations log(age) et Féret quadratique ne sont pas linéaires.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── K-FOLD CV ── -->
+  <section id="cv">
+    <div class="sh-tag">Évaluation de Performance</div>
+    <h2 class="sh-title">5-Fold Cross-Validation</h2>
+    <p class="sh-desc">Chaque point = une observation (1 005 au total). Les 5 couleurs = les 5 folds. Le fold actif (test) est mis en évidence. Clique sur "Fold suivant" pour voir les partitions tourner.</p>
+
+    <div class="card">
+      <div class="btn-group" style="margin-bottom:16px">
+        <button class="btn btn-primary" onclick="nextFold()">▶ Fold suivant</button>
+        <button class="btn btn-secondary" onclick="autoPlayCV()">⏯ Auto-play</button>
+        <button class="btn btn-secondary" onclick="resetCV()">↺ Reset</button>
+        <div class="step-dots" style="margin-left:8px">
+          <div class="step-dot active" id="sd0"></div>
+          <div class="step-dot" id="sd1"></div>
+          <div class="step-dot" id="sd2"></div>
+          <div class="step-dot" id="sd3"></div>
+          <div class="step-dot" id="sd4"></div>
+          <span class="step-label" id="cv-fold-label">Fold 1 / 5 en test</span>
+        </div>
+      </div>
+
+      <div id="cv-grid"></div>
+      <div id="cv-info" class="info-box" style="margin-top:12px"></div>
+
+      <div class="fold-scores" style="margin-top:14px">
+        <div class="fold-score active" id="fs0">
+          <div class="fold-score-label">Fold 1 — TEST ←</div>
+          <div class="fold-score-val">—</div>
+        </div>
+        <div class="fold-score" id="fs1">
+          <div class="fold-score-label">Fold 2</div>
+          <div class="fold-score-val">—</div>
+        </div>
+        <div class="fold-score" id="fs2">
+          <div class="fold-score-label">Fold 3</div>
+          <div class="fold-score-val">—</div>
+        </div>
+        <div class="fold-score" id="fs3">
+          <div class="fold-score-label">Fold 4</div>
+          <div class="fold-score-val">—</div>
+        </div>
+        <div class="fold-score" id="fs4">
+          <div class="fold-score-label">Fold 5</div>
+          <div class="fold-score-val">—</div>
+        </div>
+      </div>
+
+      <div id="cv-final" style="margin-top:12px;font-size:14px;text-align:center;font-weight:600;min-height:22px"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="info-box">
+        <strong>Pourquoi 5-fold ?</strong> Notre dataset a n=1005 → règle : 200 ≤ n ≤ 100 000 → 5-fold ou 10-fold. Bon compromis biais / variance / temps de calcul.
+      </div>
+      <div class="info-box">
+        <strong>Pourquoi shuffle=True ?</strong> Le dataset UCI est ordonné par formulation. Sans mélange, fold 1 = formulations 1-201 (une gamme), fold 2 = 202-402 (autre gamme) → folds non représentatifs.
+      </div>
+      <div class="warn-box">
+        <strong>Biais pessimiste :</strong> chaque modèle intermédiaire est entraîné sur 80% des données. Le modèle final (100%) est légèrement meilleur. Notre RMSE = 4.2 MPa est légèrement conservateur.
+      </div>
+      <div class="info-box">
+        <strong>Seeds différents :</strong> outer seed=0, inner seed=42. Des seeds identiques créeraient des partitions corrélées → biais subtil dans l'estimation.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── NESTED CV ── -->
+  <section id="nested">
+    <div class="sh-tag">Anti-Overtuning</div>
+    <h2 class="sh-title">Nested Cross-Validation</h2>
+    <p class="sh-desc">Avec une simple CV, sélectionner le meilleur HP parmi 72 configs est du cherry-picking sur des évaluations bruitées → estimation optimistement biaisée. La nested CV sépare strictement le tuning de l'évaluation.</p>
+
+    <div class="card">
+      <div class="btn-group" style="margin-bottom:18px">
+        <button class="btn btn-secondary" onclick="prevNestedStep()">◀ Précédent</button>
+        <button class="btn btn-primary"   onclick="nextNestedStep()">▶ Suivant</button>
+        <button class="btn btn-secondary" onclick="resetNested()">↺ Reset</button>
+        <span class="step-label" id="nested-step-lbl">Étape 1 / 6</span>
+      </div>
+
+      <div class="nested-outer">
+        <div class="nested-outer-label">Boucle Externe — estimation GE (outer_cv, seed=0)</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">cross_val_score(GridSearchCV(...), cv=outer_cv)</div>
+        <div class="mini-folds">
+          <div class="mini-fold mf-train-out" id="of0">F1</div>
+          <div class="mini-fold mf-train-out" id="of1">F2</div>
+          <div class="mini-fold mf-train-out" id="of2">F3</div>
+          <div class="mini-fold mf-train-out" id="of3">F4</div>
+          <div class="mini-fold mf-train-out" id="of4">F5</div>
+        </div>
+
+        <div class="nested-inner" id="inner-box" style="opacity:0.3;transition:opacity 0.4s">
+          <div class="nested-inner-label">Boucle Interne — GridSearchCV (inner_cv, seed=42)</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">GridSearchCV(pipe, param_grid, cv=inner_cv) — 72 combos</div>
+          <div class="mini-folds">
+            <div class="mini-fold mf-train-in" id="if0">i1</div>
+            <div class="mini-fold mf-train-in" id="if1">i2</div>
+            <div class="mini-fold mf-train-in" id="if2">i3</div>
+            <div class="mini-fold mf-train-in" id="if3">i4</div>
+            <div class="mini-fold mf-train-in" id="if4">i5</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="nested-msg"   class="info-box" style="margin-top:14px"></div>
+      <div id="nested-extra" style="font-size:12px;color:var(--muted);margin-top:8px;min-height:18px"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="warn-box">
+        <strong>Sans nested CV :</strong> on sélectionne le min d'une distribution bruitée. Preuve — classifieur aléatoire (GE=50%) avec 100 configs tunées → score apparent ~38% par chance. Le biais croît avec le nombre de configs testées.
+      </div>
+      <div class="ok-box">
+        <strong>Avec nested CV :</strong> le TEST EXTERNE est isolé avant le tuning. Le score qu'on en obtient n'est pas biaisé par la sélection des HPs. C'est l'estimation honnête de la GE.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DATA LEAKAGE ── -->
+  <section id="leakage">
+    <div class="sh-tag">Intégrité des Données</div>
+    <h2 class="sh-title">Data Leakage & Pipeline sklearn</h2>
+    <p class="sh-desc">Sans Pipeline sklearn, le StandardScaler voit les données de test lors de son <code>fit()</code> — contamination silencieuse qui gonfle artificiellement les performances. Le Pipeline garantit l'isolation par construction.</p>
+
+    <div class="leakage-grid">
+      <div class="leakage-block">
+        <div class="leakage-head bad">❌ Sans Pipeline — Leakage</div>
+        <div class="leakage-body">
+          <div class="code-block"><span class="hl-bad">scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)</span>
+<span class="comment"># ↑ calcule μ, σ sur TOUT X</span>
+<span class="comment"># (train + test = 1005 obs)</span>
+
+cross_val_score(Ridge(), X_scaled, y)
+<span class="comment"># test set contaminé !</span></div>
+          <div id="leak-bad-steps" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="leakage-block">
+        <div class="leakage-head good">✅ Avec Pipeline — Zéro Leakage</div>
+        <div class="leakage-body">
+          <div class="code-block">pipe = Pipeline([
+    (<span class="hl-str">'scaler'</span>, StandardScaler()),
+    (<span class="hl-str">'model'</span>, Ridge())
+])
+
+cross_val_score(pipe, X, y)
+<span class="hl-good"># .fit() sur train seulement ✅</span>
+<span class="comment"># garanti par construction</span></div>
+          <div id="leak-good-steps" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-group" style="margin:18px 0">
+      <button class="btn btn-primary" onclick="animLeakage()">▶ Animer le flux des données</button>
+    </div>
+
+    <div class="info-box">
+      <strong>Règle d'or :</strong> tout preprocessing qui "apprend" des statistiques (μ, σ, médiane, corrélations, composantes PCA...) doit être dans le Pipeline. Le préfixe <code>model__</code> dans <code>param_grid</code> cible la bonne étape du Pipeline.
+    </div>
+  </section>
+
+  <!-- ── FEATURE IMPORTANCE ── -->
+  <section id="importance">
+    <div class="sh-tag">Interprétabilité</div>
+    <h2 class="sh-title">Feature Importance & Coefficients</h2>
+    <p class="sh-desc">Deux façons de comprendre quelles features importent. GB donne des importances non-directionnelles (% de réduction MSE). Ridge donne des coefficients avec signe grâce au StandardScaler.</p>
+
+    <div class="card">
+      <div class="btn-group" style="margin-bottom:18px">
+        <button class="btn btn-primary"   id="btn-imp-gb"    onclick="renderImportanceBars('gb')">⚡ GB — Impurity Importance</button>
+        <button class="btn btn-secondary" id="btn-imp-ridge" onclick="renderImportanceBars('ridge')">📏 Ridge — Coefficients</button>
+      </div>
+      <div id="imp-subtitle" class="info-box" style="margin-bottom:18px"></div>
+      <div class="svg-chart-wrap" id="imp-svg"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="info-box">
+        <strong>age + cement = 64% :</strong> cohérent avec la physique — le béton c'est fondamentalement eau + ciment + temps. L'hydratation (log(age)) et le dosage en ciment dominent.
+      </div>
+      <div class="warn-box">
+        <strong>Limite Impurity Importance :</strong> favorise les features continues à haute cardinalité (cement varie de 102 à 540) versus features avec beaucoup de zéros (fly_ash ~55% à 0). Permutation Importance est plus robuste.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COMPARISON ── -->
+  <section id="comparison">
+    <div class="sh-tag">Résultats Finaux</div>
+    <h2 class="sh-title">Comparaison des 3 Modèles</h2>
+    <p class="sh-desc">RMSE outer CV (barres d'erreur = ±1 std) et R² pour Ridge, Random Forest et Gradient Boosting. La différence Ridge→GB (10.4→4.2 MPa) quantifie l'apport des relations non-linéaires.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">RMSE outer CV (MPa) — plus bas = meilleur</div>
+        <div class="svg-chart-wrap" id="comparison-svg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">R² — variance expliquée — plus haut = meilleur</div>
+        <div class="svg-chart-wrap" id="r2-svg"></div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:20px">
+      <div class="model-card ridge">
+        <div class="model-name" style="color:var(--ridge)">📏 Ridge Regression</div>
+        <div class="model-rmse" style="color:var(--ridge)">10.385 MPa</div>
+        <div class="model-meta">±0.449 MPa &nbsp;|&nbsp; R² = 0.590 &nbsp;|&nbsp; α = 1</div>
+        <div class="model-desc">
+          <span class="badge badge-bad">Underfit</span><br><br>
+          Relations log(age) et Féret quadratique non captées par un modèle linéaire. Sert de baseline pour quantifier le gain de la non-linéarité.
+        </div>
+      </div>
+      <div class="model-card rf">
+        <div class="model-name" style="color:var(--rf)">🌲 Random Forest</div>
+        <div class="model-rmse" style="color:var(--rf)">4.935 MPa</div>
+        <div class="model-meta">±0.318 MPa &nbsp;|&nbsp; R² = 0.907 &nbsp;|&nbsp; depth=20, n=300</div>
+        <div class="model-desc">
+          <span class="badge badge-ok">Bon équilibre</span><br><br>
+          Bagging de 300 arbres bootstrapés → variance réduite. Chaque arbre overfit individuellement mais la moyenne compense.
+        </div>
+      </div>
+      <div class="model-card gb">
+        <div class="model-name" style="color:var(--gb)">⚡ Gradient Boosting</div>
+        <div class="model-rmse" style="color:var(--gb)">4.208 MPa</div>
+        <div class="model-meta">±0.261 MPa &nbsp;|&nbsp; R² = 0.932 &nbsp;|&nbsp; lr=0.2, depth=4, n=300</div>
+        <div class="model-desc">
+          <span class="badge badge-best">⭐ Meilleur modèle</span><br><br>
+          Boosting séquentiel → corrige itérativement le biais résiduel. Plus précis que RF sur les non-linéarités physiques du béton.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
