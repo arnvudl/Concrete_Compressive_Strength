@@ -15,7 +15,7 @@
 | **Tâche** | Régression supervisée, prédiction de la résistance à la compression (MPa) |
 | **Version** | V2, version finale (merge Arnaud × Tim) |
 | **Date** | Mai 2026 |
-| **Développeurs** | Arnaud & Tim, HELMo Bloc 2, cours I2ML |
+| **Développeurs** | Arnaud & Tim, HELMo Bloc 2 |
 | **Framework** | scikit-learn, `Pipeline(StandardScaler → GradientBoostingRegressor)` |
 | **Hyperparamètres retenus** | `learning_rate=0.2`, `max_depth=4`, `n_estimators=300`, `subsample=1.0` |
 | **Protocole d'évaluation** | Nested Cross-Validation 5-fold outer × 5-fold inner (GridSearchCV) |
