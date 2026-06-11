@@ -7,17 +7,17 @@
 ## Ordre de Lecture Conseillé
 
 ```mermaid
-graph LR
-    F00["00\nLe Projet\nDataset + béton"] --> F01["01\nErreur de\nGénéralisation"]
-    F01 --> F02["02\nMétriques\nRMSE, R²"]
-    F02 --> F03["03\nCross-\nValidation"]
-    F03 --> F04["04\nHyper-\nparamètres"]
-    F04 --> F05["05\nNested CV\n⭐ critique"]
-    F05 --> F06["06\nPipeline\nanti-leakage"]
-    F06 --> F07["07\nRidge\nRégression"]
-    F07 --> F08["08\nCART, RF\net GB"]
-    F08 --> F09["09\nModel Card\n9 sections"]
-    F09 --> F10["10\nInterprét-\nabilité"]
+graph TD
+    F00["00 — Le Projet<br/>Dataset + béton"] --> F01["01 — Erreur de Généralisation"]
+    F01 --> F02["02 — Métriques<br/>RMSE, R²"]
+    F02 --> F03["03 — Cross-Validation"]
+    F03 --> F04["04 — Hyperparamètres"]
+    F04 --> F05["05 — Nested CV ⭐ critique"]
+    F05 --> F06["06 — Pipeline anti-leakage"]
+    F06 --> F07["07 — Ridge Régression"]
+    F07 --> F08["08 — CART, RF et GB"]
+    F08 --> F09["09 — Model Card<br/>9 sections"]
+    F09 --> F10["10 — Interprétabilité"]
 ```
 
 ---

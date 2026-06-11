@@ -4,6 +4,36 @@
 
 ---
 
+## C'est Quoi, Ridge, en Une Phrase ?
+
+**Ridge = "tracer la meilleure droite (ou le meilleur plan) possible à travers les points, mais en interdisant les pentes trop extrêmes."**
+
+### Étape 1 : la régression linéaire classique (OLS)
+
+Imagine un graphique tout simple : en abscisse `cement`, en ordonnée `résistance du béton`. Tu as un nuage de points (un point = une gâchée de béton testée). La régression linéaire cherche la **droite qui passe au plus près de tous ces points**.
+
+```mermaid
+graph LR
+    NUAGE["Nuage de points<br/>cement vs résistance"] --> DROITE["Trouver la droite<br/>qui minimise la distance<br/>aux points"]
+    DROITE --> EQ["y = pente × cement + ordonnée_origine"]
+```
+
+Avec **8 features** (cement, water, age, etc.) au lieu d'une seule, on ne trace plus une droite dans un plan 2D mais un **"plan" dans un espace à 8 dimensions** — impossible à dessiner, mais le principe est exactement le même : trouver les **coefficients** (un par feature) qui minimisent l'erreur de prédiction.
+
+C'est ça, **OLS** (Ordinary Least Squares = "moindres carrés ordinaires") : on cherche les coefficients θ qui minimisent la somme des (erreur)².
+
+### Étape 2 : le problème — des coefficients qui s'affolent
+
+Si deux features racontent **presque la même histoire** (ex: `water` et `superplasticizer` sont très corrélées — moins d'eau = plus de superplastifiant), OLS a du mal à savoir **lequel des deux mérite le crédit**. Résultat : il peut donner un coefficient énorme et positif à l'un, et énorme et négatif à l'autre, qui s'annulent presque — **un tout petit changement dans les données peut faire exploser ces coefficients dans tous les sens**.
+
+### Étape 3 : Ridge = OLS + une laisse
+
+Ridge ajoute une règle supplémentaire : **"en plus de bien prédire, garde tes coefficients petits"**. C'est comme mettre une laisse aux coefficients — ils peuvent bouger pour bien ajuster les données, mais pas s'envoler. Le paramètre `alpha` règle la **longueur de la laisse** : `alpha=0` = pas de laisse (OLS pur), `alpha` très grand = laisse très courte (tous les coefficients ≈ 0, le modèle prédit juste la moyenne).
+
+Maintenant qu'on a l'intuition, voyons les détails mathématiques.
+
+---
+
 ## La Régression Linéaire Simple (OLS) — Point de Départ
 
 **Idée fondamentale :** le modèle prédit y comme une **combinaison linéaire** des features :

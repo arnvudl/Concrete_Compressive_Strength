@@ -22,22 +22,20 @@ Imagine qu'on coupe le dataset en 80% train / 20% test une seule fois. Problème
 
 ```mermaid
 graph TD
-    DS["Dataset\n1005 obs"] --> SPLIT["Diviser en 5 folds\n~201 obs chacun"]
-    
-    SPLIT --> F1["Fold 1\n201 obs"]
-    SPLIT --> F2["Fold 2\n201 obs"]
-    SPLIT --> F3["Fold 3\n201 obs"]
-    SPLIT --> F4["Fold 4\n201 obs"]
-    SPLIT --> F5["Fold 5\n201 obs"]
-
-    F1 --> I1["Itération 1\nTrain: F2+F3+F4+F5 → Test: F1 → E1"]
-    F2 --> I2["Itération 2\nTrain: F1+F3+F4+F5 → Test: F2 → E2"]
-    F3 --> I3["Itération 3\nTrain: F1+F2+F4+F5 → Test: F3 → E3"]
-    F4 --> I4["Itération 4\nTrain: F1+F2+F3+F5 → Test: F4 → E4"]
-    F5 --> I5["Itération 5\nTrain: F1+F2+F3+F4 → Test: F5 → E5"]
-
-    I1 & I2 & I3 & I4 & I5 --> GE["GE_hat = moyenne(E1...E5)\n± std(E1...E5)"]
+    DS["Dataset<br/>1005 obs"] --> SPLIT["Diviser en 5 folds<br/>~201 obs chacun"]
+    SPLIT --> ITER["5 itérations successives"]
+    ITER --> GE["GE_hat = moyenne(E1...E5)<br/>± std(E1...E5)"]
 ```
+
+| Itération | Train | Test | Score |
+|---|---|---|---|
+| 1 | F2+F3+F4+F5 | F1 | E1 |
+| 2 | F1+F3+F4+F5 | F2 | E2 |
+| 3 | F1+F2+F4+F5 | F3 | E3 |
+| 4 | F1+F2+F3+F5 | F4 | E4 |
+| 5 | F1+F2+F3+F4 | F5 | E5 |
+
+À chaque itération, **un fold différent sert de test** (~201 obs) et les **4 autres servent d'entraînement** (~804 obs). Au final, chaque observation a été utilisée exactement une fois en test.
 
 **Propriétés clés :**
 - Chaque observation est utilisée exactement **une fois** en test
@@ -93,6 +91,8 @@ outer_cv = KFold(n_splits=5, shuffle=True, random_state=0)
 ---
 
 ## Pourquoi des Seeds Différents (inner / outer) ?
+
+> **C'est quoi inner/outer CV ?** En bref : **outer** = la CV qui mesure la **performance finale** du modèle (la GE). **inner** = une CV **à l'intérieur** de chaque fold d'entraînement de l'outer, qui sert uniquement à **choisir les meilleurs hyperparamètres** (ex: `alpha` pour Ridge) via GridSearchCV. On a besoin des deux car si on choisissait les hyperparamètres ET qu'on évaluait le modèle sur les mêmes données, le score final serait trop optimiste (overtuning). Explication complète et schéma : [Fiche 05 — Nested CV](05_nested_cv.md) ⭐.
 
 ```python
 inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)  # tuning HP

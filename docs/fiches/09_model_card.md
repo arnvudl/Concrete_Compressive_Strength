@@ -17,17 +17,21 @@ Une **Model Card** est un document standardisé qui décrit un modèle ML de man
 
 ```mermaid
 graph TD
-    MC["Model Card\n(Mitchell et al. 2019)"] --> WHO["Pour qui ?"]
+    MC["Model Card<br/>(Mitchell et al. 2019)"] --> WHO["Pour qui ?"]
     MC --> WHAT["Contient quoi ?"]
-    
-    WHO --> DEV["Développeurs\nqui réutilisent le modèle"]
-    WHO --> AUDIT["Auditeurs\nqui vérifient la conformité"]
-    WHO --> USERS["Utilisateurs finaux\nqui font confiance aux prédictions"]
-    
-    WHAT --> PERF["Performances honnêtes"]
-    WHAT --> LIMITS["Limites clairement documentées"]
-    WHAT --> SCOPE["Usages appropriés et interdits"]
 ```
+
+| Pour qui ? | Rôle |
+|---|---|
+| **Développeurs** | qui réutilisent le modèle |
+| **Auditeurs** | qui vérifient la conformité |
+| **Utilisateurs finaux** | qui font confiance aux prédictions |
+
+| Contient quoi ? | Détail |
+|---|---|
+| **Performances** | honnêtes, chiffrées (RMSE, R², std) |
+| **Limites** | clairement documentées |
+| **Usages** | appropriés et interdits explicités |
 
 ---
 

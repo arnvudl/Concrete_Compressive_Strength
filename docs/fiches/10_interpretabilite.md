@@ -69,15 +69,17 @@ Normalisé pour que toutes les importances somment à 1.
 **Résultats GB dans notre projet :**
 
 ```mermaid
-graph LR
-    AGE["age\n35%\n⭐⭐⭐⭐⭐"] 
-    CEM["cement\n29%\n⭐⭐⭐⭐"]
-    WAT["water\n11%\n⭐⭐"]
-    SLA["slag\n8.5%\n⭐⭐"]
-    SP["superplasticizer\n8.3%\n⭐⭐"]
-    FIN["fine_agg\n4.5%\n⭐"]
-    COA["coarse_agg\n1.8%\n"]
-    FLY["fly_ash\n1.2%\n"]
+graph TD
+    AGE["age — 35% ⭐⭐⭐⭐⭐"]
+    CEM["cement — 29% ⭐⭐⭐⭐"]
+    WAT["water — 11% ⭐⭐"]
+    SLA["slag — 8.5% ⭐⭐"]
+    SP["superplasticizer — 8.3% ⭐⭐"]
+    FIN["fine_agg — 4.5% ⭐"]
+    COA["coarse_agg — 1.8%"]
+    FLY["fly_ash — 1.2%"]
+
+    AGE --> CEM --> WAT --> SLA --> SP --> FIN --> COA --> FLY
 ```
 
 **age + cement = ~64% de l'importance combinée.**

@@ -68,19 +68,85 @@ graph TD
 
 ## Décomposition Biais-Variance
 
+### L'idée, sans aucune formule : la cible de fléchettes
+
+Imagine que tu lances des fléchettes sur une cible, et que le **centre de la cible = la vraie valeur** (la vraie résistance du béton). Tu lances **plusieurs fois** (= tu entraînes le modèle sur plusieurs jeux de données d'entraînement légèrement différents). Où atterrissent tes fléchettes ?
+
+| | Variance FAIBLE | Variance ÉLEVÉE |
+|---|---|---|
+| **Biais FAIBLE** | 🎯 Toutes les fléchettes groupées au centre — **modèle idéal** | 🎯 Fléchettes éparpillées AUTOUR du centre — **1 arbre CART profond** : en moyenne juste, mais très instable |
+| **Biais ÉLEVÉ** | 🎯 Fléchettes groupées MAIS décalées du centre — **Ridge** : cohérent mais systématiquement à côté | 🎯 Fléchettes éparpillées ET décalées — **pire des cas** |
+
+- **Le biais** = est-ce que tes fléchettes sont **centrées** sur la cible **en moyenne** ? Si non → tu as un défaut systématique de visée (ex: tu vises toujours 5cm trop à gauche). Pour un modèle : c'est une **erreur due à des hypothèses trop simples** (ex: Ridge suppose une relation **droite** alors que la vraie relation `age` → résistance est une **courbe logarithmique** — peu importe combien de données tu lui donnes, Ridge ne pourra jamais "voir" la courbe, il va toujours rater de la même façon).
+
+- **La variance** = est-ce que tes fléchettes sont **groupées** entre elles, ou **éparpillées** ? Si éparpillées → ton geste est instable, change un peu et le résultat change beaucoup. Pour un modèle : c'est une **sensibilité excessive aux données d'entraînement**. Si tu changes légèrement le jeu d'entraînement (enlève 50 lignes, par exemple), un arbre CART profond va produire un arbre **complètement différent** → ses prédictions varient énormément d'un entraînement à l'autre.
+
+- **Le bruit irréductible ($\sigma^2_\epsilon$)** = même un archer parfait ne touche pas EXACTEMENT le même point à chaque fois (le vent, le tremblement de la main...). Pour le béton : deux gâchées **avec exactement la même formulation** n'auront jamais **exactement** la même résistance (micro-défauts, conditions de séchage...). Aucun modèle, aussi bon soit-il, ne peut prédire ce résidu.
+
+### Deux exemples concrets pour bien fixer les idées
+
+**Le biais, concrètement :** imagine que tu dois prédire la résistance du béton selon son **âge**. La vraie relation ressemble à ça (ça monte vite au début, puis ça plafonne) :
+
+```
+résistance
+   |           ____________
+   |        /
+   |     /
+   |   /
+   | /
+   |/_______________________ âge
+```
+
+Ridge, lui, ne sait dessiner que des **droites**. Donc il va tracer un truc comme ça :
+
+```
+résistance
+   |              /
+   |           /
+   |        /
+   |     /
+   |  /
+   |/_______________________ âge
+```
+
+Résultat : pour les bétons jeunes, Ridge **sous-estime** systématiquement (la droite est en dessous de la vraie courbe). Pour les bétons très vieux, Ridge **surestime** systématiquement (la droite est au-dessus). **Toujours dans le même sens, toujours pour la même raison** (il ne peut pas faire de courbe). Ça, c'est le biais : une **erreur structurelle, prévisible, qui ne change pas** même si tu lui donnes plus de données ou un autre échantillon — son hypothèse de départ ("c'est une droite") est juste fausse.
+
+**La variance, concrètement :** tu entraînes un arbre CART très profond sur 1000 gâchées de béton. Il fait plein de découpages très fins, jusqu'à coller presque parfaitement à CES 1000 points précis (bruit compris). Maintenant, retire 50 gâchées au hasard et réentraîne le même arbre. Comme l'arbre colle de très près aux données, ces 50 points en moins **changent complètement les découpages** → tu obtiens un arbre très différent, avec des prédictions différentes pour les mêmes nouvelles gâchées :
+
+```
+Entraînement 1 (1000 obs)               →  Arbre A  →  prédit 42 MPa pour ce béton
+Entraînement 2 (950 obs, données très
+similaires, juste 50 lignes en moins)   →  Arbre B  →  prédit 31 MPa pour LE MÊME béton
+```
+
+C'est ça la variance : le modèle **n'est pas stable**, son résultat dépend trop du hasard de l'échantillon d'entraînement.
+
+**En une ligne chacun :**
+- **Biais** = "je me trompe toujours de la même façon, à cause d'une hypothèse fausse" (Ridge et sa droite)
+- **Variance** = "je donne des réponses très différentes selon les données sur lesquelles j'ai appris" (un arbre profond instable)
+
+### La formule (maintenant qu'on a l'intuition)
+
 $$GE = \underbrace{\text{Biais}^2}_{\text{underfitting}} + \underbrace{\text{Variance}}_{\text{overfitting}} + \underbrace{\sigma^2_\epsilon}_{\text{bruit irréductible}}$$
 
-**Biais :** erreur systématique. Le modèle "rate" toujours dans la même direction. Exemple : Ridge prédit des relations linéaires mais la vraie relation de `age` est logarithmique → biais structurel.
+C'est juste la traduction mathématique du schéma des fléchettes : ton **erreur totale** (GE) se décompose en 3 sources indépendantes qui s'additionnent. Pour la minimiser, il faut réduire le biais ET la variance — mais comme on va le voir, **réduire l'un augmente souvent l'autre**.
 
-**Variance :** sensibilité aux fluctuations du dataset. Change les données d'entraînement légèrement → le modèle change beaucoup. Exemple : un seul arbre CART profond.
+| Terme | Analogie fléchettes | Concrètement pour nous |
+|---|---|---|
+| **Biais²** | Décalage moyen par rapport au centre | Ridge : suppose une droite, rate `log(age)` → biais structurel |
+| **Variance** | Dispersion des fléchettes entre elles | 1 arbre CART profond : change le train set → arbre très différent |
+| **σ²ε** | Tremblement de main inévitable | Variabilité naturelle du béton (même formulation → résistances légèrement différentes) |
 
-**Bruit irréductible :** même avec un modèle parfait, il y a toujours une variabilité naturelle dans les données qu'on ne peut pas prédire.
+### Le Trade-off Fondamental
 
-**Trade-off fondamental :**
+Plus un modèle est **complexe** (= flexible, capable d'épouser des formes compliquées), plus il peut **réduire son biais** (il "voit" mieux les vraies relations) — mais il devient aussi **plus sensible aux données d'entraînement** (sa variance augmente).
+
 ```
-Complexité ↑ → Biais ↓  mais  Variance ↑
-Complexité ↓ → Biais ↑  mais  Variance ↓
+Complexité ↑ → Biais ↓  mais  Variance ↑   (ex: arbre très profond)
+Complexité ↓ → Biais ↑  mais  Variance ↓   (ex: Ridge, droite simple)
 ```
+
+**L'objectif n'est pas de minimiser le biais OU la variance séparément, mais leur SOMME.** C'est pour ça que les méthodes d'ensemble (Random Forest, Gradient Boosting) sont puissantes : elles partent d'un modèle à variance élevée (un arbre) et la réduisent (en moyennant — RF) ou partent d'un modèle à biais élevé (un arbre faible) et le réduisent (en corrigeant les erreurs séquentiellement — GB). Voir [Fiche 08](08_cart_rf_gb.md).
 
 ---
 

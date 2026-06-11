@@ -42,23 +42,23 @@ Pourquoi c'est important ? Si un ingénieur se trompe dans sa formulation, **le 
 
 ```mermaid
 graph TD
-    BETON["🧱 Béton"] --> LIANT["Liants — réactions chimiques"]
-    BETON --> EAU["💧 Eau — catalyseur"]
-    BETON --> AGG["🪨 Agrégats — remplissage inerte"]
-    BETON --> ADJUVANT["🧪 Adjuvants — modificateurs"]
-    BETON --> AGE["⏳ Âge — maturation"]
-
-    LIANT --> CEMENT["cement — Ciment Portland\n(liant principal)"]
-    LIANT --> SLAG["slag — Laitier de haut fourneau\n(déchet d'aciérie recyclé)"]
-    LIANT --> FLYASH["fly_ash — Cendres volantes\n(cendres de centrale charbon)"]
-
-    EAU --> WATER["water — Eau\n(loi de Féret : excès = fragilité)"]
-
-    AGG --> COARSE["coarse_agg — Graviers > 5mm"]
-    AGG --> FINE["fine_agg — Sable fin < 5mm"]
-
-    ADJUVANT --> SP["superplasticizer — Fluidifiant\n(réduit l'eau nécessaire)"]
+    BETON["🧱 Béton"] --> LIANT["Liants<br/>réactions chimiques"]
+    BETON --> EAU["💧 Eau<br/>catalyseur"]
+    BETON --> AGG["🪨 Agrégats<br/>remplissage inerte"]
+    BETON --> ADJUVANT["🧪 Adjuvants<br/>modificateurs"]
+    BETON --> AGE["⏳ Âge<br/>maturation"]
 ```
+
+| Catégorie | Feature | Rôle |
+|---|---|---|
+| **Liants** (réactions chimiques) | `cement` | Ciment Portland — liant principal |
+| | `slag` | Laitier de haut fourneau — déchet d'aciérie recyclé |
+| | `fly_ash` | Cendres volantes — cendres de centrale charbon |
+| **Eau** (catalyseur) | `water` | Loi de Féret : excès = fragilité |
+| **Agrégats** (remplissage inerte) | `coarse_agg` | Graviers > 5mm |
+| | `fine_agg` | Sable fin < 5mm |
+| **Adjuvants** (modificateurs) | `superplasticizer` | Fluidifiant — réduit l'eau nécessaire |
+| **Âge** (maturation) | `age` | Jours depuis la coulée — hydratation logarithmique |
 
 ---
 

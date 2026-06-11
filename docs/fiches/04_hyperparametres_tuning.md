@@ -89,6 +89,8 @@ On a choisi **Grid Search** car nos grilles sont compactes (≤ 72 combos) → e
 'model__alpha': [0.001, 0.01, 0.1, 1, 10, 100, 1000]
 ```
 
+> **C'est quoi L2 ?** Ridge ne minimise pas que l'erreur de prédiction (MSE) — il ajoute une pénalité sur la **somme des carrés des coefficients** ($\sum_j \theta_j^2$), appelée **norme L2**. `alpha` règle le poids de cette pénalité : plus `alpha` est grand, plus les coefficients sont forcés à rester petits ("une laisse" sur les coefficients) → modèle plus stable mais potentiellement moins précis sur le train. Détails complets : [Fiche 07 — Ridge Regression](07_ridge_regression.md).
+
 `alpha` contrôle la **force de régularisation L2** :
 - `alpha` → 0 : pas de pénalité → OLS pur → risque d'overfitting avec multicolinéarité
 - `alpha` → ∞ : tous les coefficients → 0 → modèle constant → underfitting

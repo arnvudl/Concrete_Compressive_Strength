@@ -60,12 +60,14 @@ $$R^2 = 1 - \frac{\sum_{i=1}^n(y_i - \hat{y}_i)^2}{\sum_{i=1}^n(y_i - \bar{y})^2
 - R² mesure donc : **combien on fait mieux que de prédire la moyenne ?**
 
 ```mermaid
-graph LR
-    R2_1["R² = 1\nPrédictions parfaites\nzéro erreur"] 
-    R2_09["R² = 0.93 ← Notre GB\n93% de variance expliquée"]
-    R2_05["R² = 0.59 ← Notre Ridge\n59% de variance expliquée"]
-    R2_0["R² = 0\nAussi bon que\nprédire la moyenne"]
-    R2_NEG["R² < 0\nPire que prédire la moyenne\n(possible sur test set !)"]
+graph TD
+    R2_1["R² = 1<br/>Prédictions parfaites, zéro erreur"]
+    R2_09["R² = 0.93 ← Notre GB<br/>93% de variance expliquée"]
+    R2_05["R² = 0.59 ← Notre Ridge<br/>59% de variance expliquée"]
+    R2_0["R² = 0<br/>Aussi bon que prédire la moyenne"]
+    R2_NEG["R² < 0<br/>Pire que prédire la moyenne (possible sur test set !)"]
+
+    R2_1 --> R2_09 --> R2_05 --> R2_0 --> R2_NEG
 ```
 
 **Nos résultats :**
@@ -85,6 +87,28 @@ $$MAE = \frac{1}{n}\sum_{i=1}^n |y_i - \hat{y}_i|$$
 **Inconvénient :** non différentiable en 0 → moins pratique pour certains optimiseurs.
 **On ne l'utilise pas** dans notre projet, mais c'est une bonne alternative si on a beaucoup d'outliers.
 
+### Pourquoi on n'en a pas eu besoin — preuve par l'analyse IQR
+
+Dans le **Notebook 1** (`01_eda_data_cleaning.ipynb`), on a quantifié les outliers avec la **méthode IQR** : une valeur est outlier si elle sort de $[Q1 - 1.5 \times IQR,\ Q3 + 1.5 \times IQR]$.
+
+| Variable | Outliers | % |
+|---|---|---|
+| cement | 0 | 0.0% |
+| slag | 2 | 0.2% |
+| fly_ash | 0 | 0.0% |
+| water | 15 | 1.5% |
+| superplasticizer | 10 | 1.0% |
+| coarse_agg | 0 | 0.0% |
+| fine_agg | 5 | 0.5% |
+| age | 59 | 5.9% |
+| **strength** (target) | **8** | **0.8%** |
+
+**Ce qui compte pour le choix RMSE vs MAE, c'est surtout les outliers sur la TARGET** (`strength`), car c'est elle que RMSE pénalise au carré. Ici, seulement **0.8%** des observations (8 sur 1005) sont des outliers de target → trop peu pour que la sensibilité de RMSE aux grandes erreurs pose un vrai problème.
+
+`age` a 5.9% d'outliers, mais ce sont des bétons testés à 365 jours — des valeurs **physiquement valides**, pas des erreurs de mesure (voir Notebook 1, décision : on ne supprime aucun outlier).
+
+> ⚠️ **Nuance pour l'oral** : ce n'est pas la raison *a priori* du choix de RMSE (RMSE a été choisi dès le départ pour son interprétabilité en MPa). Mais c'est un bon argument *a posteriori* si on vous demande "et si vous aviez eu beaucoup d'outliers, MAE aurait été pertinent ?" → vous pouvez répondre avec ces chiffres précis : non, ~1% d'outliers sur la target, RMSE reste justifié.
+
 ---
 
 ## Comparaison des Métriques
@@ -98,25 +122,50 @@ $$MAE = \frac{1}{n}\sum_{i=1}^n |y_i - \hat{y}_i|$$
 
 ---
 
-## Le Problème du neg_MSE dans GridSearchCV
+## Pourquoi neg_MSE pendant le tuning, mais RMSE dans les résultats ?
 
-**Pourquoi `neg_mean_squared_error` et pas `mean_squared_error` ?**
+C'est la question piège la plus fréquente — voici la réponse en deux temps.
 
-sklearn a une convention : toutes les métriques dans `scoring=` sont à **maximiser**. Donc :
-- `accuracy` → on veut le **max** → ✅ logique
-- `mean_squared_error` → on veut le **min** → ❌ convention inversée
+### 1. Minimiser MSE ou RMSE revient EXACTEMENT au même
 
-Solution sklearn : `neg_mean_squared_error` = `-MSE`. En **maximisant** -MSE, on **minimise** MSE.
+$$RMSE = \sqrt{MSE}$$
+
+La fonction racine carrée $\sqrt{\cdot}$ est **strictement croissante** : si $MSE_A < MSE_B$, alors forcément $\sqrt{MSE_A} < \sqrt{MSE_B}$, donc $RMSE_A < RMSE_B$. **L'ordre ne change jamais.**
+
+Conséquence concrète : la combinaison d'hyperparamètres qui **minimise le MSE** est **exactement la même** que celle qui **minimise le RMSE**. GridSearchCV obtiendrait le **même gagnant**, qu'on lui donne MSE ou RMSE comme critère.
+
+→ **Le choix MSE vs RMSE pour le tuning n'a donc AUCUN impact sur le résultat (les meilleurs HPs trouvés).** C'est juste une question de commodité de calcul.
+
+### 2. Pourquoi MSE est plus pratique en interne
+
+- **Différentiable partout** (utile pour les algorithmes basés sur le gradient — pas notre cas direct ici avec GridSearch, mais c'est la convention historique de sklearn)
+- **Pas besoin de calculer une racine carrée** à chaque évaluation de fold × combinaison d'HPs (ex: 72 combinaisons × 5 folds inner × 5 folds outer = 1800 évaluations) — un micro-gain de calcul
+- C'est le **scorer standard** de sklearn pour la régression
+
+### 3. `neg_mean_squared_error` : pourquoi le signe "moins" ?
+
+sklearn a une convention : toutes les métriques dans `scoring=` sont à **maximiser** par GridSearchCV. Or on veut **minimiser** le MSE (moins d'erreur = mieux). Conflit de convention !
+
+Solution sklearn : `neg_mean_squared_error` = $-MSE$. **Maximiser $-MSE$** ⟺ **minimiser $MSE$**. C'est juste un changement de signe pour respecter la convention "scoring = à maximiser".
+
+### 4. Donc, qui sert à quoi ?
+
+| Étape | Métrique utilisée | Pourquoi |
+|---|---|---|
+| **GridSearchCV (inner loop)** | `neg_mean_squared_error` | Sélectionner les meilleurs HPs — équivalent à RMSE pour ce choix, mais convention sklearn (signe + pas de racine) |
+| **Résultats reportés (outer loop)** | RMSE (= $\sqrt{-\text{score}}$) | Pour que ce soit **interprétable en MPa** par un humain |
 
 ```python
 # Dans le code :
 inner_cv = KFold(n_splits=5, shuffle=True, random_state=42)
 search = GridSearchCV(pipe, param_grid, cv=inner_cv,
-                      scoring='neg_mean_squared_error')  # ← -MSE
+                      scoring='neg_mean_squared_error')  # ← sélection des HPs
 
-# Après CV, pour récupérer le RMSE lisible :
-rmse_scores = np.sqrt(-outer_scores)  # ← on réinverse le signe
+# Après la outer CV, pour récupérer le RMSE lisible :
+rmse_scores = np.sqrt(-outer_scores)  # ← on annule le signe, puis racine carrée
 ```
+
+**En une phrase :** *"On utilise neg_MSE pendant le tuning parce que c'est le scorer standard de sklearn et qu'il sélectionne EXACTEMENT les mêmes hyperparamètres que RMSE (la racine carrée ne change pas l'ordre des valeurs) — mais on convertit en RMSE pour présenter les résultats finaux, car le MPa est l'unité que comprend un ingénieur, pas le MPa²."*
 
 ---
 
