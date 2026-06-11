@@ -48,6 +48,24 @@ Un ingénieur civil raisonne en MPa. Dire *"mon modèle se trompe en moyenne de 
 
 **Propriété clé :** RMSE est sensible aux outliers (grandes erreurs pèsent beaucoup à cause du carré).
 
+### Que signifie concrètement "RMSE = X MPa" ?
+
+Le dataset UCI a une cible **`Concrete compressive strength`**, exprimée en **MPa** (mégapascals — une unité de pression/contrainte), avec des valeurs allant grosso modo de **2 à 82 MPa** selon les formulations.
+
+**Le RMSE est dans la MÊME unité que cette cible** — c'est exactement ça l'intérêt du RMSE par rapport au MSE (qui serait en MPa²) : il se lit **directement comme une erreur de prédiction sur la résistance elle-même**.
+
+**Exemple concret :** un échantillon de béton dont la **vraie résistance mesurée en labo = 35 MPa**.
+
+| Modèle | Prédiction typique (35 ± RMSE) | Erreur typique |
+|---|---|---|
+| Ridge | entre **24.6 et 45.4 MPa** | ±10.385 MPa — fourchette énorme, presque inutilisable |
+| Random Forest | entre **30.1 et 39.9 MPa** | ±4.935 MPa — assez précis |
+| **Gradient Boosting** | entre **30.8 et 39.2 MPa** | **±4.208 MPa — le plus précis** |
+
+**Pourquoi c'est important pour un ingénieur :** la résistance à la compression détermine **pour quel usage** un béton peut être utilisé (dalle, poteau, fondation, route...). Une erreur de ±10 MPa peut faire la différence entre "ce béton convient pour une structure porteuse" et "ce béton ne convient qu'à un usage non structurel". Un modèle à RMSE = 4.2 MPa devient un **outil d'aide à la formulation** crédible (estimer la résistance avant de couler et tester réellement) ; un modèle à ±10.4 MPa est trop imprécis pour ça.
+
+> *"Le RMSE n'est pas une métrique abstraite — c'est littéralement 'de combien je me trompe en MPa sur la résistance que je prédis'. Notre meilleur modèle (GB) se trompe en moyenne de 4.2 MPa sur une échelle qui va de 2 à 82 MPa, contre 10.4 MPa pour Ridge — soit plus de 2 fois plus précis, ce qui rend le modèle réellement exploitable."*
+
 ---
 
 ## R² — Coefficient de Détermination ← Notre Métrique Complémentaire

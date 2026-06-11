@@ -10,6 +10,33 @@
 
 ---
 
+## Vue d'ensemble : on fait QUOI, dans quel ordre ?
+
+C'est LA question à avoir en tête avant de rentrer dans le détail des fiches suivantes. Voici le déroulé complet, étape par étape :
+
+```mermaid
+graph TD
+    A["1. Nettoyage (Notebook 01)\n1030 → 1005 obs, EDA"] --> B["2. Pour CHAQUE modèle\n(Ridge, RF, GB) séparément :\nlancer UNE nested CV complète"]
+    B --> C["3. Chaque nested CV produit\n5 RMSE (un par fold outer)\n→ moyenne ± std"]
+    C --> D["4. Comparer les 3 moyennes\n→ le plus bas gagne (GB)"]
+    D --> E["5. Ré-entraîner le modèle gagnant\nsur 100% des données\navec ses meilleurs HPs"]
+    E --> F["6. Model Card\n(Notebook + docs)"]
+```
+
+**Le point clé qui prête souvent à confusion : "CV" vs "nested CV"**
+
+Ce ne sont **pas deux étapes différentes l'une après l'autre**. Dans ce projet, **on ne fait jamais de simple CV** — on fait **une seule chose : la nested CV**, et on la répète **une fois par modèle** (donc 3 fois au total : Ridge, RF, GB).
+
+À l'intérieur de CHAQUE nested CV, il y a bien deux boucles imbriquées (voir [Fiche 03](03_cross_validation.md) et [Fiche 05](05_nested_cv.md)) :
+- la **boucle externe** (outer CV, 5-fold) → mesure la performance finale (la GE) → c'est elle qui produit les "5 RMSE" du tableau ci-dessus
+- la **boucle interne** (inner CV, 5-fold), **imbriquée dans chaque fold externe** → sert uniquement à choisir les meilleurs hyperparamètres pour CE fold
+
+Donc : 1 modèle = 1 nested CV = 1 RMSE moyen ± std final. On fait ça 3 fois (un par algorithme), et **on compare ces 3 RMSE moyens entre eux** pour désigner le gagnant. La comparaison entre Ridge/RF/GB se fait donc **après et entre** les nested CV, pas pendant.
+
+→ Pour savoir **comment on est sûr que GB est vraiment le meilleur** (et pas juste de la chance), voir la section dédiée dans [Fiche 05 — Nested CV](05_nested_cv.md#comment-sait-on-que-gb-est-vraiment-le-meilleur-modèle-).
+
+---
+
 ## C'est quoi la résistance à la compression ?
 
 La **résistance à la compression** (en MPa — MégaPascals) mesure la force qu'un bloc de béton peut supporter avant de se fissurer.

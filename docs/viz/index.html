@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="fr" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,18 +18,24 @@
   </div>
 
   <a href="#intro"      class="active"><span class="nav-icon">🏠</span> Accueil</a>
+  <a href="#biasvar">   <span class="nav-icon">⚖️</span> Biais-Variance</a>
+  <a href="#metrics">   <span class="nav-icon">📐</span> Métriques</a>
   <a href="#ridge">     <span class="nav-icon">📉</span> Ridge & L2</a>
   <a href="#cv">        <span class="nav-icon">🔄</span> Cross-Validation</a>
+  <a href="#tuning">    <span class="nav-icon">🎛️</span> Tuning HP</a>
   <a href="#nested">    <span class="nav-icon">🎯</span> Nested CV</a>
+  <a href="#trees">     <span class="nav-icon">🌳</span> CART/RF/GB</a>
   <a href="#leakage">   <span class="nav-icon">🚰</span> Data Leakage</a>
   <a href="#importance"><span class="nav-icon">📊</span> Feature Importance</a>
+  <a href="#interpret"> <span class="nav-icon">🔍</span> Interprétabilité</a>
+  <a href="#modelcard"> <span class="nav-icon">📋</span> Model Card</a>
   <a href="#comparison"><span class="nav-icon">🏆</span> Comparaison</a>
 
   <div class="nav-footer">
     <div class="theme-toggle">
-      <span>Mode sombre</span>
+      <span>Mode clair</span>
       <label class="toggle-switch">
-        <input type="checkbox" id="theme-toggle">
+        <input type="checkbox" id="theme-toggle" checked>
         <div class="toggle-track"></div>
         <div class="toggle-thumb"></div>
       </label>
@@ -81,6 +87,153 @@
         <div class="stat-value" style="color:var(--accent)">1 800</div>
         <div class="stat-label">Entraînements par modèle</div>
         <div class="stat-sub">5 outer × 72 combos × 5 inner</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── BIAIS-VARIANCE ── -->
+  <section id="biasvar">
+    <div class="sh-tag">Fiche 01 — Erreur de Généralisation</div>
+    <h2 class="sh-title">Biais, Variance & Complexité</h2>
+    <p class="sh-desc">GE = Biais² + Variance + σ²ε (bruit irréductible). Plus un modèle est complexe (flexible), plus son biais diminue — mais sa variance augmente. L'objectif n'est pas de minimiser l'un ou l'autre, mais leur somme.</p>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="slider-wrap">
+        <div class="slider-label">
+          <span>Complexité du modèle</span>
+          <strong id="complexity-val">Modèle constant</strong>
+        </div>
+        <input type="range" id="complexity-slider" min="0" max="100" value="2" step="1">
+        <div class="slider-ticks">
+          <span>Constant</span>
+          <span>Ridge (linéaire)</span>
+          <span>RF / GB réglés</span>
+          <span>Arbre profond non régularisé</span>
+        </div>
+      </div>
+      <div class="svg-chart-wrap" id="biasvar-curve-svg" style="margin-top:14px"></div>
+      <div id="biasvar-msg" class="info-box" style="margin-top:14px"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Décomposition GE = Biais² + Variance + σ²ε</div>
+        <div class="svg-chart-wrap" id="biasvar-decomp-svg"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">La cible de fléchettes</div>
+        <div class="quad-grid">
+          <div class="quad-cell">
+            <strong class="quad-label">Biais faible · Variance faible</strong>
+            🎯 Toutes les fléchettes groupées au centre — <strong>modèle idéal</strong>
+          </div>
+          <div class="quad-cell">
+            <strong class="quad-label">Biais faible · Variance élevée</strong>
+            🎯 Éparpillées AUTOUR du centre — <strong>1 arbre CART profond</strong> : juste en moyenne, très instable
+          </div>
+          <div class="quad-cell">
+            <strong class="quad-label">Biais élevé · Variance faible</strong>
+            🎯 Groupées MAIS décalées — <strong>Ridge</strong> : cohérent mais systématiquement à côté
+          </div>
+          <div class="quad-cell">
+            <strong class="quad-label">Biais élevé · Variance élevée</strong>
+            🎯 Éparpillées ET décalées — <strong>pire des cas</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="warn-box">
+        <strong>Biais</strong> = "je me trompe toujours de la même façon" — Ridge suppose une relation <strong>droite</strong> alors que la vraie relation âge → résistance est une <strong>courbe logarithmique</strong>. Peu importe la quantité de données, Ridge ne pourra jamais "voir" la courbe.
+      </div>
+      <div class="ok-box">
+        <strong>Variance</strong> = "je donne des réponses très différentes selon les données d'entraînement" — un arbre CART profond change complètement de structure si on retire 50 observations, donnant des prédictions très différentes pour le même béton (ex: 42 MPa vs 31 MPa).
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:20px">
+      <div class="info-box"><strong>Ridge — Underfit</strong><br>Biais élevé, variance faible. RMSE = 10.4 MPa. Ne capte pas log(age) ni la loi de Féret quadratique.</div>
+      <div class="ok-box"><strong>Random Forest — Bon équilibre</strong><br>Bagging de 300 arbres → variance maîtrisée. RMSE = 4.9 MPa.</div>
+      <div class="ok-box"><strong>Gradient Boosting — Meilleur équilibre</strong><br>Correction itérative du biais résiduel. RMSE = 4.2 MPa ⭐</div>
+    </div>
+  </section>
+
+  <!-- ── MÉTRIQUES ── -->
+  <section id="metrics">
+    <div class="sh-tag">Fiche 02 — Métriques de Régression</div>
+    <h2 class="sh-title">MSE, RMSE, MAE & R²</h2>
+    <p class="sh-desc">Une métrique transforme (y, ŷ) en un seul nombre résumant la qualité des prédictions. Déplace le curseur pour voir comment une même erreur |y − ŷ| est pénalisée différemment selon la métrique.</p>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="slider-wrap">
+        <div class="slider-label">
+          <span>10 observations : 9 ont une erreur de 2 MPa, 1 "outlier" a une erreur de... </span>
+          <strong id="metric-err-val">5.0 MPa</strong>
+        </div>
+        <input type="range" id="metric-err-slider" min="0" max="20" value="5" step="0.5">
+      </div>
+      <div class="svg-chart-wrap" id="metric-curve-svg" style="margin-top:10px"></div>
+      <div class="grid-3" style="margin-top:14px">
+        <div class="stat-card">
+          <div class="stat-value" id="metric-mae-val" style="color:var(--accent3)">2.30</div>
+          <div class="stat-label">MAE sur les 10 obs (MPa)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="metric-mse-val" style="color:var(--ridge)">6.10</div>
+          <div class="stat-label">MSE sur les 10 obs (MPa²)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="metric-rmse-val" style="color:var(--accent)">2.47</div>
+          <div class="stat-label">RMSE = √MSE (MPa)</div>
+        </div>
+      </div>
+      <div id="metric-msg" class="info-box" style="margin-top:14px"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Comparaison des métriques</div>
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px">
+          <tr style="color:var(--muted); text-align:left">
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Métrique</th>
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Unité</th>
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Outliers</th>
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Usage</th>
+          </tr>
+          <tr><td style="padding:6px 8px">MSE</td><td style="padding:6px 8px">MPa²</td><td style="padding:6px 8px">⚠️ très sensible</td><td style="padding:6px 8px">GridSearchCV (neg_MSE)</td></tr>
+          <tr><td style="padding:6px 8px"><strong>RMSE</strong></td><td style="padding:6px 8px"><strong>MPa</strong></td><td style="padding:6px 8px">⚠️ sensible</td><td style="padding:6px 8px"><strong>résultats reportés</strong></td></tr>
+          <tr><td style="padding:6px 8px">MAE</td><td style="padding:6px 8px">MPa</td><td style="padding:6px 8px">✅ robuste</td><td style="padding:6px 8px">si beaucoup d'outliers</td></tr>
+          <tr><td style="padding:6px 8px"><strong>R²</strong></td><td style="padding:6px 8px">[0,1]</td><td style="padding:6px 8px">⚠️ sensible</td><td style="padding:6px 8px"><strong>comparaison entre modèles</strong></td></tr>
+        </table>
+        <div class="info-box" style="margin-top:14px">
+          <strong>neg_MSE vs RMSE :</strong> la racine carrée est strictement croissante → minimiser MSE ou RMSE donne <strong>exactement les mêmes hyperparamètres</strong>. sklearn utilise <code>neg_mean_squared_error</code> pendant le tuning (convention "scoring = à maximiser"), puis on reporte le RMSE pour l'interprétabilité en MPa.
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">R² = 1 − SSE_modèle / SSE_baseline</div>
+        <p style="font-size:12.5px; color:var(--muted); margin-bottom:14px">Le dénominateur = erreur d'un modèle nul qui prédit toujours la moyenne ȳ. La barre colorée = SSE du modèle (ce qui reste); la partie grise = ce que le modèle a "expliqué".</p>
+        <div class="r2-bar-row">
+          <div class="r2-bar-label" style="color:var(--ridge)">Ridge</div>
+          <div class="r2-bar-track"><div class="r2-bar-fill" style="width:41%; background:var(--ridge)"></div></div>
+          <div class="r2-bar-pct">R² = 0.590</div>
+        </div>
+        <div class="r2-bar-row">
+          <div class="r2-bar-label" style="color:var(--rf)">RF</div>
+          <div class="r2-bar-track"><div class="r2-bar-fill" style="width:9.3%; background:var(--rf)"></div></div>
+          <div class="r2-bar-pct">R² = 0.907</div>
+        </div>
+        <div class="r2-bar-row">
+          <div class="r2-bar-label" style="color:var(--gb)">GB</div>
+          <div class="r2-bar-track"><div class="r2-bar-fill" style="width:6.8%; background:var(--gb)"></div></div>
+          <div class="r2-bar-pct">R² = 0.932</div>
+        </div>
+        <div class="info-box" style="margin-top:10px">
+          <strong>R² &lt; 0 possible</strong> sur un test set : signifie que le modèle est <strong>pire qu'un modèle constant</strong> (jamais sur le train).
+        </div>
+        <div class="warn-box" style="margin-top:10px">
+          <strong>Pourquoi pas MAE ?</strong> Analyse IQR : seulement <strong>0.8%</strong> d'outliers sur la target (8/1005). Pas un problème pour RMSE — argument <em>a posteriori</em>, pas la raison initiale du choix.
+        </div>
       </div>
     </div>
   </section>
@@ -203,6 +356,52 @@
     </div>
   </section>
 
+  <!-- ── HYPERPARAMETER TUNING ── -->
+  <section id="tuning">
+    <div class="sh-tag">Fiche 04 — Hyperparamètres & Tuning</div>
+    <h2 class="sh-title">Grid Search & Hyperparamètres</h2>
+    <p class="sh-desc">Les <strong>paramètres θ</strong> sont appris automatiquement pendant <code>.fit()</code>. Les <strong>hyperparamètres λ</strong> sont fixés AVANT l'entraînement, par tuning. Analogie : θ = les muscles d'un sportif, λ = le programme du coach.</p>
+
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">Paramètres θ vs Hyperparamètres λ</div>
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px">
+          <tr style="color:var(--muted); text-align:left">
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)"></th>
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Paramètres θ</th>
+            <th style="padding:6px 8px; border-bottom:1px solid var(--border)">Hyperparamètres λ</th>
+          </tr>
+          <tr><td style="padding:6px 8px; color:var(--muted)">Quand ?</td><td style="padding:6px 8px">Pendant l'entraînement</td><td style="padding:6px 8px"><strong>Avant</strong> l'entraînement</td></tr>
+          <tr><td style="padding:6px 8px; color:var(--muted)">Comment ?</td><td style="padding:6px 8px">Minimisation auto de la loss</td><td style="padding:6px 8px">GridSearchCV / RandomizedSearchCV</td></tr>
+          <tr><td style="padding:6px 8px; color:var(--muted)">Ridge</td><td style="padding:6px 8px">coefficients w₁...w₈</td><td style="padding:6px 8px"><code>alpha</code></td></tr>
+          <tr><td style="padding:6px 8px; color:var(--muted)">GB</td><td style="padding:6px 8px">valeurs des feuilles</td><td style="padding:6px 8px"><code>learning_rate</code>, <code>max_depth</code>, <code>n_estimators</code></td></tr>
+          <tr><td style="padding:6px 8px; color:var(--muted)">sklearn</td><td style="padding:6px 8px">appris par <code>.fit()</code></td><td style="padding:6px 8px">passés au constructeur</td></tr>
+        </table>
+        <div class="info-box" style="margin-top:14px">
+          <strong>Préfixe <code>model__</code> obligatoire</strong> dans un Pipeline : <code>param_grid = {'model__alpha': [...]}</code> — sinon GridSearchCV ne sait pas à quelle étape appartient l'hyperparamètre.
+        </div>
+      </div>
+      <div class="card" style="display:flex; flex-direction:column; gap:10px">
+        <div class="card-title">Pourquoi le tuning est difficile</div>
+        <div class="warn-box"><strong>Boîte noire :</strong> pas de gradient ∇λ disponible.</div>
+        <div class="warn-box"><strong>Coût élevé :</strong> tester 1 config = entraîner le modèle entier.</div>
+        <div class="warn-box"><strong>Stochasticité :</strong> le score varie selon la partition aléatoire.</div>
+        <div class="ok-box" style="margin-top:auto"><strong>Notre choix : Grid Search</strong> — grilles compactes (≤72 combos) → exploration exhaustive en temps raisonnable. Random Search serait préférable pour de très grandes grilles.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Grid Search GB — RMSE inner CV (learning_rate × max_depth, n_estimators=300, subsample=1.0)</div>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px">Sous-grille illustrative de la grille complète à 72 combos (3 × 4 × 3 × 2). GridSearchCV teste chaque combinaison par 5-fold inner CV et garde le RMSE moyen le plus bas.</p>
+      <div class="btn-group" style="margin:10px 0">
+        <button class="btn btn-primary" onclick="animGridSearch()">▶ Scanner la grille</button>
+        <button class="btn btn-secondary" onclick="resetGridSearch()">↺ Reset</button>
+      </div>
+      <div id="grid-heatmap"></div>
+      <div id="grid-msg" class="info-box" style="margin-top:14px"></div>
+    </div>
+  </section>
+
   <!-- ── NESTED CV ── -->
   <section id="nested">
     <div class="sh-tag">Anti-Overtuning</div>
@@ -251,6 +450,54 @@
       </div>
       <div class="ok-box">
         <strong>Avec nested CV :</strong> le TEST EXTERNE est isolé avant le tuning. Le score qu'on en obtient n'est pas biaisé par la sélection des HPs. C'est l'estimation honnête de la GE.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CART / RF / GB ── -->
+  <section id="trees">
+    <div class="sh-tag">Fiche 08 — CART, Random Forest & Gradient Boosting</div>
+    <h2 class="sh-title">Arbres, Bagging & Boosting</h2>
+    <p class="sh-desc">CART découpe l'espace des features en rectangles par des splits axis-aligned. RF moyenne 300 arbres bootstrapés (bagging → réduit la variance). GB entraîne 300 arbres séquentiellement, chacun corrigeant les erreurs résiduelles du précédent (boosting → réduit le biais).</p>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">CART — Découpage récursif de l'espace (axis-aligned splits)</div>
+      <div class="svg-chart-wrap" id="cart-split-svg"></div>
+      <div class="btn-group" style="margin-top:14px">
+        <button class="btn btn-primary" onclick="nextCartSplit()">▶ Split suivant</button>
+        <button class="btn btn-secondary" onclick="resetCartSplit()">↺ Reset</button>
+      </div>
+      <div id="cart-msg" class="info-box" style="margin-top:14px"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">🌲 Random Forest — Bagging réduit la variance</div>
+        <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px">300 arbres profonds, chacun entraîné sur un échantillon bootstrap différent. Chaque arbre overfit individuellement (variance élevée) — mais leur <strong>moyenne</strong> est stable.</p>
+        <div class="btn-group" style="margin-bottom:10px">
+          <button class="btn btn-primary" onclick="redrawBagging()">🎲 Tirer 8 arbres</button>
+        </div>
+        <div class="svg-chart-wrap" id="bagging-svg"></div>
+        <div class="ok-box" style="margin-top:10px">Chaque point = la prédiction d'un arbre pour le même béton. La ligne pointillée = vraie résistance. Le losange = moyenne des 300 arbres → bien plus proche de la cible que chaque arbre pris seul.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚡ Gradient Boosting — Correction séquentielle des résidus</div>
+        <p style="font-size:12.5px; color:var(--muted); margin-bottom:10px">"Équipe de relais" : l'arbre 1 fait une prédiction grossière, l'arbre 2 corrige son erreur (résidu), l'arbre 3 corrige le résidu restant, etc. learning_rate=0.2 pondère chaque correction.</p>
+        <div class="btn-group" style="margin-bottom:10px">
+          <button class="btn btn-primary" onclick="nextBoostStep()">▶ Itération suivante</button>
+          <button class="btn btn-secondary" onclick="resetBoost()">↺ Reset</button>
+        </div>
+        <div class="svg-chart-wrap" id="boost-svg"></div>
+        <div id="boost-msg" class="info-box" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="info-box">
+        <strong>Bagging (RF) :</strong> Bootstrap Aggregating — entraîne N modèles sur N échantillons bootstrap (tirage avec remise) du même dataset, puis moyenne les prédictions. Réduit la <strong>variance</strong> sans augmenter le biais.
+      </div>
+      <div class="ok-box">
+        <strong>Boosting (GB) :</strong> entraîne les modèles <strong>séquentiellement</strong>, chacun sur les résidus du précédent : résidu = y_vrai − prédiction(modèles précédents). Réduit le <strong>biais</strong> itérativement.
       </div>
     </div>
   </section>
@@ -322,6 +569,117 @@ cross_val_score(pipe, X, y)
       <div class="warn-box">
         <strong>Limite Impurity Importance :</strong> favorise les features continues à haute cardinalité (cement varie de 102 à 540) versus features avec beaucoup de zéros (fly_ash ~55% à 0). Permutation Importance est plus robuste.
       </div>
+    </div>
+  </section>
+
+  <!-- ── INTERPRÉTABILITÉ (suite) ── -->
+  <section id="interpret">
+    <div class="sh-tag">Fiche 10 — Interprétabilité</div>
+    <h2 class="sh-title">Prédiction vs Explication</h2>
+    <p class="sh-desc">Un modèle peut être très précis (bonne prédiction) sans qu'on comprenne pourquoi (mauvaise explication). Les méthodes d'interprétabilité cherchent à répondre à : "pourquoi le modèle prédit-il ÇA pour CETTE observation ?"</p>
+
+    <div class="grid-2">
+      <div class="info-box">
+        <strong>Prédiction (accuracy) :</strong> "Quelle est la résistance prédite pour ce béton ?" → GB répond avec RMSE = 4.2 MPa. C'est la performance brute, mesurée par nested CV.
+      </div>
+      <div class="ok-box">
+        <strong>Explication (interpretability) :</strong> "Pourquoi GB prédit-il 45 MPa pour CE béton précis ?" → feature importance globale (qui compte en moyenne ?) ou locale (qu'est-ce qui a poussé CETTE prédiction vers le haut ?).
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-title">Partial Dependence (illustratif) — Résistance prédite vs Âge du béton</div>
+      <p style="font-size:12.5px; color:var(--muted); margin-bottom:6px">Toutes les autres features fixées à leur médiane, on fait varier <code>age</code> de 1 à 365 jours et on observe la prédiction. C'est l'illustration directe du biais de Ridge vu en Fiche 01.</p>
+      <div class="svg-chart-wrap" id="pdp-svg"></div>
+      <div class="info-box" style="margin-top:14px">
+        <strong>GB (courbe)</strong> capture la forme logarithmique réelle de l'hydratation : forte progression les premiers jours, puis plateau. <strong>Ridge (droite)</strong> ne peut tracer qu'une ligne — il sous-estime les bétons jeunes et surestime les bétons très âgés. C'est le <strong>biais structurel</strong> de Ridge, visible directement.
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:20px">
+      <div class="warn-box">
+        <strong>Limite Impurity Importance :</strong> favorise les features continues à haute cardinalité (cement: 102-540) vs features avec beaucoup de zéros (fly_ash ~55% à 0). Permutation Importance est plus robuste mais coûteuse (re-prédire en permutant chaque colonne).
+      </div>
+      <div class="info-box">
+        <strong>Global vs Local :</strong> feature importance (GB) et coefficients (Ridge) sont des explications <strong>globales</strong> — valables "en moyenne" sur tout le dataset. Des méthodes comme SHAP donnent des explications <strong>locales</strong>, par observation — hors scope de ce projet mais bonne piste pour aller plus loin.
+      </div>
+    </div>
+  </section>
+
+  <!-- ── MODEL CARD ── -->
+  <section id="modelcard">
+    <div class="sh-tag">Fiche 09 — Model Card (Mitchell et al., 2019)</div>
+    <h2 class="sh-title">Model Card du Projet</h2>
+    <p class="sh-desc">Documentation standardisée du modèle final retenu (Gradient Boosting), suivant le framework Mitchell et al. — clique sur chaque section pour la déplier.</p>
+
+    <div class="card">
+      <details class="mc-section" open>
+        <summary>1. Model Details</summary>
+        <div class="mc-body">
+          <p><strong>Modèle :</strong> Gradient Boosting Regressor (sklearn), dans un Pipeline avec StandardScaler.</p>
+          <p><strong>Hyperparamètres :</strong> learning_rate=0.2, max_depth=4, n_estimators=300, subsample=1.0 — sélectionnés par GridSearchCV (5-fold inner CV).</p>
+          <p><strong>Auteurs :</strong> Tim & Arnaud — projet académique I2ML 2026.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>2. Intended Use</summary>
+        <div class="mc-body">
+          <p><strong>Usage prévu :</strong> estimer la résistance à la compression (MPa) d'une formulation de béton à partir de sa composition et de son âge — outil pédagogique d'aide à la formulation.</p>
+          <p><strong>Hors scope :</strong> usage en production / certification structurelle réelle — le modèle n'a pas été validé sur des données externes au dataset UCI.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>3. Factors</summary>
+        <div class="mc-body">
+          <p><strong>Facteurs pertinents :</strong> les 8 features (cement, slag, fly_ash, water, superplasticizer, coarse_agg, fine_agg, age) couvrent des plages réalistes de formulations de béton classique.</p>
+          <p><strong>Facteur dominant :</strong> age (35.1% importance GB) et cement (29.2%) — cohérent avec la physique de l'hydratation.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>4. Metrics</summary>
+        <div class="mc-body">
+          <p><strong>Métrique principale :</strong> RMSE (MPa) — interprétable directement par un ingénieur.</p>
+          <p><strong>Métrique complémentaire :</strong> R² — variance expliquée, pour comparer les modèles entre eux.</p>
+          <p><strong>Pourquoi pas MAE :</strong> seulement 0.8% d'outliers sur la target (analyse IQR) — RMSE reste pertinent.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>5. Evaluation Data</summary>
+        <div class="mc-body">
+          <p><strong>Nested CV :</strong> 5-fold outer (seed=0) pour l'estimation de la GE, jamais vue pendant le tuning interne (5-fold inner, seed=42).</p>
+          <p><strong>Coût :</strong> 5 × 5 × 72 = 1 800 entraînements pour GB (+360 pour le refit final) sur les ~4 135 entraînements totaux du projet.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>6. Training Data</summary>
+        <div class="mc-body">
+          <p><strong>Source :</strong> UCI Concrete Compressive Strength dataset.</p>
+          <p><strong>Taille après nettoyage :</strong> 1 005 observations (−25 doublons sur 1 030 originales).</p>
+          <p><strong>Preprocessing :</strong> StandardScaler (μ=0, σ=1), encapsulé dans le Pipeline pour zéro data leakage.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>7. Quantitative Analyses</summary>
+        <div class="mc-body">
+          <p>Ridge (baseline) : RMSE = 10.385 ± 0.449 MPa, R² = 0.590</p>
+          <p>Random Forest : RMSE = 4.935 ± 0.318 MPa, R² = 0.907</p>
+          <p><strong>Gradient Boosting ⭐ : RMSE = 4.208 ± 0.261 MPa, R² = 0.932</strong></p>
+          <p>Le saut Ridge → GB (10.4 → 4.2 MPa) quantifie l'apport des relations non-linéaires (log(age), Féret quadratique).</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>8. Ethical Considerations</summary>
+        <div class="mc-body">
+          <p>Aucune donnée personnelle — dataset purement physico-chimique. Risque principal : sur-confiance dans une prédiction hors de la plage d'entraînement (ex: formulations très exotiques) — le modèle extrapolerait silencieusement.</p>
+        </div>
+      </details>
+      <details class="mc-section">
+        <summary>9. Caveats and Recommendations</summary>
+        <div class="mc-body">
+          <p><strong>Biais pessimiste :</strong> RMSE outer CV calculé sur des modèles entraînés à 80% — le modèle final (100% des données) est légèrement meilleur.</p>
+          <p><strong>Recommandation :</strong> ne pas utiliser hors des plages de composition du dataset d'entraînement (ex: cement 102-540 kg/m³, age 1-365 jours). Réentraîner si de nouvelles formulations (béton fibré, etc.) sont introduites.</p>
+        </div>
+      </details>
     </div>
   </section>
 

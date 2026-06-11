@@ -160,6 +160,46 @@ $$\text{Entraînements} = 5 \text{ folds outer} \times 5 \text{ folds inner} \ti
 
 ---
 
+## Comment sait-on que GB est vraiment le meilleur modèle ?
+
+C'est une question qui revient souvent : on ne choisit pas GB parce qu'une **formule** ou une **théorie** dirait "le boosting est intrinsèquement meilleur pour le béton". On le choisit **empiriquement**, par comparaison sur des données jamais vues pendant l'entraînement — c'est exactement ce que la nested CV est conçue pour fournir.
+
+### La comparaison
+
+On lance la nested CV complète **séparément pour chaque modèle** (Ridge, RF, GB — voir [Fiche 00, vue d'ensemble](00_projet_dataset.md#vue-densemble--on-fait-quoi-dans-quel-ordre-)). Chacune produit 5 RMSE (un par fold outer), dont on prend la moyenne ± écart-type :
+
+| Modèle | RMSE moyen | Écart-type |
+|---|---|---|
+| Ridge | 10.385 | ±0.449 |
+| Random Forest | 4.935 | ±0.318 |
+| **Gradient Boosting** | **4.208** | **±0.261** |
+
+GB gagne car son RMSE moyen sur des données **jamais vues** (ni pendant l'entraînement, ni pendant le tuning) est le plus bas.
+
+### Et si c'était juste de la chance ?
+
+Deux niveaux de risque à distinguer :
+
+**1. Bruit d'échantillonnage (le risque "facile" à écarter ici)**
+
+Compare l'écart entre modèles à l'écart-type de chacun :
+- GB (4.208 ± 0.261) vs RF (4.935 ± 0.318) → écart ≈ 0.73 MPa, bien plus grand que les écarts-types (~0.3) → les intervalles ne se chevauchent quasiment pas
+- Ridge vs les deux autres → écart ×2, encore plus net
+
+Si le classement venait du hasard du découpage en folds, on s'attendrait à des intervalles qui se chevauchent largement. Ce n'est pas le cas → **l'écart est probablement réel, pas un coup de chance.**
+
+> ⚠️ Nuance théorique : un t-test classique sur ces 5 valeurs serait invalide car les folds ne sont pas indépendants ([Fiche 03](03_cross_validation.md#non-indépendance-des-folds-subtilité-théorique)). On reste donc à une comparaison "à l'œil" des moyennes ± std — c'est la norme en pratique, mais ce n'est pas une preuve statistique formelle.
+
+**2. Spécificité au dataset (le risque réel, qu'on ne peut pas écarter)**
+
+La nested CV répond à la question : *"GB généralise-t-il le mieux sur des données qui ressemblent à celles de ce dataset UCI ?"* — et la réponse est oui. Mais si en réalité (autre labo, autres types de ciment, autres conditions de cure...) la relation entre les variables et la résistance était différente, GB pourrait ne plus être le meilleur. La nested CV donne la **meilleure estimation honnête possible avec les données disponibles**, pas une garantie universelle.
+
+### En une phrase pour l'oral
+
+> *"On ne choisit pas GB sur la base d'une théorie qui dirait que le boosting est intrinsèquement meilleur pour le béton. On le choisit parce qu'empiriquement, sur 5 splits train/test indépendants jamais vus pendant l'entraînement, GB fait systématiquement moins d'erreur que RF et Ridge, avec un écart bien supérieur à la variance observée entre les folds. Le risque résiduel : cette conclusion ne vaut que pour des données similaires à ce dataset — ce n'est pas une garantie universelle, mais la meilleure estimation honnête qu'on puisse donner."*
+
+---
+
 ## À retenir pour l'oral
 
 > *"Une simple CV ne suffit pas pour évaluer un modèle après tuning : on sélectionne le minimum parmi plusieurs évaluations bruitées, ce qui est toujours trop optimiste — comme cherry-picker la meilleure loot box sur 100 tirages. La nested CV résout ce problème avec deux boucles séparées : la boucle interne tune les HPs, la boucle externe évalue la GE sur un test set jamais vu pendant le tuning. Dans sklearn, c'est `cross_val_score(GridSearchCV(...))` — une seule ligne. Coût : 1800 entraînements par modèle (5×5×72) — d'où l'importance de garder des grilles compactes."*

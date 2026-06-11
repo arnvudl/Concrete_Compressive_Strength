@@ -40,6 +40,20 @@ const DATA = {
     cement: '#6c63ff', slag: '#43d9ad', age: '#ffd166',
     fly_ash: '#ff9f43', water: '#ff6584', superplasticizer: '#a483ff',
     fine_agg: '#74b9ff', coarse_agg: '#94a3b8'
+  },
+
+  // Grid search illustratif GB (sous-grille de la grille complète à 72 combos)
+  // lignes = learning_rate, colonnes = max_depth (n_estimators=300, subsample=1.0)
+  gridSearch: {
+    learningRates: [0.01, 0.05, 0.1, 0.2],
+    maxDepths: [3, 4, 5],
+    rmse: [
+      [6.85, 6.55, 6.40],
+      [4.95, 4.62, 4.58],
+      [4.48, 4.32, 4.38],
+      [4.38, 4.21, 4.45]
+    ],
+    bestRow: 3, bestCol: 1 // lr=0.2, depth=4 → 4.21
   }
 };
 
@@ -74,6 +88,13 @@ function initTheme() {
       renderRegPath(currentAlpha);
       renderComparisonChart();
       renderR2Chart();
+      renderBiasVarianceCurve(currentComplexity);
+      renderDecompBars(currentComplexity);
+      renderMetricCurve(currentOutlierErr);
+      renderCartSplit(cartStep);
+      renderBaggingSVG();
+      renderBoostStep(boostStep);
+      renderPDP();
     }, 50);
   });
 }
@@ -809,6 +830,571 @@ function renderR2Chart() {
 }
 
 /* ═══════════════════════════════════════════════════
+   BIAIS-VARIANCE — COMPLEXITY CURVE & DECOMPOSITION
+═══════════════════════════════════════════════════ */
+let currentComplexity = 2;
+
+// Modèles théoriques (illustratifs, pas les vraies valeurs RMSE)
+function bias2(c)     { return 9 * Math.exp(-c/25); }
+function variance(c)  { return 0.2 + 7 * Math.pow(c/100, 3); }
+const NOISE = 1.2;
+function trainErr(c)  { return 0.6 + bias2(c) * 0.5; }
+function testErr(c)   { return bias2(c) + variance(c) + NOISE; }
+
+const COMPLEXITY_MARKERS = [
+  { c: 5,  label: 'Constant',  color: 'var(--muted)' },
+  { c: 14, label: 'Ridge',     color: 'var(--ridge)' },
+  { c: 50, label: 'RF',        color: 'var(--rf)' },
+  { c: 58, label: 'GB',        color: 'var(--gb)' },
+  { c: 95, label: 'Arbre profond', color: 'var(--accent2)' }
+];
+
+function renderBiasVarianceCurve(c) {
+  const container = $('biasvar-curve-svg');
+  container.innerHTML = '';
+  const W = 660, H = 280;
+  const M = { top: 20, right: 24, bottom: 44, left: 56 };
+  const PW = W - M.left - M.right, PH = H - M.top - M.bottom;
+  const MAXY = 11;
+
+  function xOf(v) { return M.left + (v/100) * PW; }
+  function yOf(v) { return M.top + PH - (v/MAXY) * PH; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto';
+
+  drawGrid(svg, M.left, M.top, PW, PH, 5, 5);
+  drawAxis(svg, M.left, M.top, M.left, M.top+PH);
+  drawAxis(svg, M.left, M.top+PH, M.left+PW, M.top+PH);
+
+  [0,2,4,6,8,10].forEach(v => {
+    const yy = yOf(v);
+    drawAxis(svg, M.left-4, yy, M.left, yy);
+    svgText(svg, v, M.left-8, yy, { anchor:'end', base:'middle', size:10 });
+  });
+  svgText(svg, 'Erreur (illustratif)', 14, M.top+PH/2, {
+    anchor:'middle', base:'middle', size:11, transform:`rotate(-90,14,${M.top+PH/2})`
+  });
+  svgText(svg, 'Complexité du modèle →', M.left+PW/2, H-6, { size:11 });
+
+  // Curves
+  const N = 100;
+  function buildPath(fn) {
+    const pts = [];
+    for (let i=0;i<=N;i++) {
+      const cc = i;
+      pts.push(`${xOf(cc)},${yOf(fn(cc))}`);
+    }
+    return 'M ' + pts.join(' L ');
+  }
+  svg.appendChild(svgEl('path', { d: buildPath(trainErr), stroke: 'var(--rf)', 'stroke-width': 2.5, fill:'none' }));
+  svg.appendChild(svgEl('path', { d: buildPath(testErr), stroke: 'var(--ridge)', 'stroke-width': 2.5, fill:'none' }));
+
+  svgText(svg, 'Train error', M.left+PW-10, yOf(trainErr(100))-8, { anchor:'end', size:11, color:'var(--rf)' });
+  svgText(svg, 'Test error (≈ GE)', M.left+PW-10, yOf(testErr(100))-8, { anchor:'end', size:11, color:'var(--ridge)' });
+
+  // Markers for our models
+  COMPLEXITY_MARKERS.forEach(m => {
+    const x = xOf(m.c), y = yOf(testErr(m.c));
+    svg.appendChild(svgEl('circle', { cx:x, cy:y, r:4, fill:m.color, stroke:getThemeVar('--surface'), 'stroke-width':1.5 }));
+    svgText(svg, m.label, x, M.top+PH+16, { size:9.5, color:m.color });
+  });
+
+  // Current complexity marker
+  const xC = xOf(c);
+  svg.appendChild(svgEl('line', { x1:xC, y1:M.top, x2:xC, y2:M.top+PH, stroke: getThemeVar('--svg-axis'), 'stroke-width':1.5, 'stroke-dasharray':'4 3' }));
+  svg.appendChild(svgEl('circle', { cx:xC, cy:yOf(testErr(c)), r:5.5, fill:'var(--accent)', stroke:getThemeVar('--surface'), 'stroke-width':2 }));
+  svg.appendChild(svgEl('circle', { cx:xC, cy:yOf(trainErr(c)), r:5.5, fill:'var(--accent4)', stroke:getThemeVar('--surface'), 'stroke-width':2 }));
+
+  container.appendChild(svg);
+}
+
+function renderDecompBars(c) {
+  const container = $('biasvar-decomp-svg');
+  const b2 = bias2(c), v = variance(c), n = NOISE;
+  const maxV = 10;
+  function row(label, val, color) {
+    const pct = Math.min(100, (val/maxV)*100);
+    return `<div class="r2-bar-row">
+      <div class="r2-bar-label" style="color:${color}">${label}</div>
+      <div class="r2-bar-track"><div class="r2-bar-fill" style="width:${pct}%; background:${color}"></div></div>
+      <div class="r2-bar-pct">${val.toFixed(2)}</div>
+    </div>`;
+  }
+  container.innerHTML =
+    row('Biais²', b2, 'var(--ridge)') +
+    row('Variance', v, 'var(--gb)') +
+    row('σ²ε', n, 'var(--muted)') +
+    `<div class="info-box" style="margin-top:10px"><strong>GE ≈ ${(b2+v+n).toFixed(2)}</strong> (somme des trois termes)</div>`;
+}
+
+function initComplexitySlider() {
+  const slider = $('complexity-slider');
+  function update() {
+    const c = +slider.value;
+    currentComplexity = c;
+    let label;
+    if (c < 8) label = 'Modèle constant (prédit la moyenne)';
+    else if (c < 25) label = 'Ridge (linéaire)';
+    else if (c < 75) label = 'RF / GB bien réglés';
+    else label = 'Arbre profond non régularisé';
+    $('complexity-val').textContent = label;
+
+    let msg, cls;
+    if (c < 8) {
+      msg = '<strong>Sous-apprentissage extrême :</strong> le modèle prédit ~35 MPa pour tout. Biais maximal, variance quasi nulle. Train error ET test error sont élevées et proches.';
+      cls = 'warn-box';
+    } else if (c < 25) {
+      msg = '<strong>Ridge :</strong> biais élevé (relation linéaire ne capte pas log(age)), variance faible. Train ≈ Test mais les deux restent élevées → underfitting.';
+      cls = 'warn-box';
+    } else if (c < 75) {
+      msg = '<strong>RF / GB bien réglés :</strong> proche du minimum de l\'erreur de test — le meilleur compromis biais/variance. C\'est la zone visée par le tuning.';
+      cls = 'ok-box';
+    } else {
+      msg = '<strong>Arbre profond non régularisé :</strong> biais quasi nul (colle aux données train), mais variance énorme → train error ≈ 0, test error remonte. Overfitting.';
+      cls = 'warn-box';
+    }
+    $('biasvar-msg').className = cls;
+    $('biasvar-msg').innerHTML = msg;
+
+    renderBiasVarianceCurve(c);
+    renderDecompBars(c);
+  }
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* ═══════════════════════════════════════════════════
+   MÉTRIQUES — MAE vs RMSE SUR UN OUTLIER
+═══════════════════════════════════════════════════ */
+let currentOutlierErr = 5;
+
+function renderMetricCurve(outlierErr) {
+  const container = $('metric-curve-svg');
+  container.innerHTML = '';
+  const W = 640, H = 240;
+  const M = { top: 16, right: 20, bottom: 36, left: 50 };
+  const PW = W - M.left - M.right, PH = H - M.top - M.bottom;
+
+  function maeOf(x) { return (9*2 + x) / 10; }
+  function mseOf(x) { return (9*4 + x*x) / 10; }
+  function rmseOf(x) { return Math.sqrt(mseOf(x)); }
+
+  function xOf(v) { return M.left + (v/20) * PW; }
+  function yOf(v) { return M.top + PH - (v/8) * PH; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto';
+  drawGrid(svg, M.left, M.top, PW, PH, 5, 4);
+  drawAxis(svg, M.left, M.top, M.left, M.top+PH);
+  drawAxis(svg, M.left, M.top+PH, M.left+PW, M.top+PH);
+
+  [0,2,4,6,8].forEach(v => {
+    const yy = yOf(v);
+    drawAxis(svg, M.left-4, yy, M.left, yy);
+    svgText(svg, v, M.left-8, yy, { anchor:'end', base:'middle', size:10 });
+  });
+  [0,5,10,15,20].forEach(v => {
+    const xx = xOf(v);
+    drawAxis(svg, xx, M.top+PH, xx, M.top+PH+4);
+    svgText(svg, v, xx, M.top+PH+15, { size:10 });
+  });
+  svgText(svg, "Erreur de l'outlier (MPa)", M.left+PW/2, H-4, { size:11 });
+
+  const N = 80;
+  function buildPath(fn) {
+    const pts = [];
+    for (let i=0;i<=N;i++) {
+      const x = i/N*20;
+      pts.push(`${xOf(x)},${yOf(fn(x))}`);
+    }
+    return 'M ' + pts.join(' L ');
+  }
+  svg.appendChild(svgEl('path', { d: buildPath(maeOf), stroke:'var(--accent3)', 'stroke-width':2.5, fill:'none' }));
+  svg.appendChild(svgEl('path', { d: buildPath(rmseOf), stroke:'var(--ridge)', 'stroke-width':2.5, fill:'none' }));
+  svgText(svg, 'MAE', xOf(20)-8, yOf(maeOf(20))-8, { anchor:'end', size:11, color:'var(--accent3)' });
+  svgText(svg, 'RMSE', xOf(20)-8, yOf(rmseOf(20))-8, { anchor:'end', size:11, color:'var(--ridge)' });
+
+  // Marker
+  const xH = xOf(outlierErr);
+  svg.appendChild(svgEl('line', { x1:xH, y1:M.top, x2:xH, y2:M.top+PH, stroke:getThemeVar('--svg-axis'), 'stroke-width':1.5, 'stroke-dasharray':'4 3' }));
+  svg.appendChild(svgEl('circle', { cx:xH, cy:yOf(maeOf(outlierErr)), r:5, fill:'var(--accent3)', stroke:getThemeVar('--surface'), 'stroke-width':1.5 }));
+  svg.appendChild(svgEl('circle', { cx:xH, cy:yOf(rmseOf(outlierErr)), r:5, fill:'var(--ridge)', stroke:getThemeVar('--surface'), 'stroke-width':1.5 }));
+
+  container.appendChild(svg);
+}
+
+function initMetricSlider() {
+  const slider = $('metric-err-slider');
+  function update() {
+    const x = +slider.value;
+    currentOutlierErr = x;
+    $('metric-err-val').textContent = x.toFixed(1) + ' MPa';
+
+    const mae = (9*2+x)/10, mse = (9*4+x*x)/10, rmse = Math.sqrt(mse);
+    $('metric-mae-val').textContent = mae.toFixed(2);
+    $('metric-mse-val').textContent = mse.toFixed(2);
+    $('metric-rmse-val').textContent = rmse.toFixed(2);
+
+    let msg, cls;
+    if (x <= 2) {
+      msg = "<strong>Pas d'outlier :</strong> les 10 erreurs valent ~2 MPa. MAE ≈ RMSE — pour une seule observation, RMSE = |erreur| = MAE.";
+      cls = 'info-box';
+    } else if (x <= 10) {
+      msg = `<strong>Outlier modéré (${x} MPa) :</strong> RMSE (${rmse.toFixed(2)}) commence à s'écarter de MAE (${mae.toFixed(2)}) — le carré amplifie cette seule grande erreur.`;
+      cls = 'info-box';
+    } else {
+      msg = `<strong>Gros outlier (${x} MPa) :</strong> RMSE (${rmse.toFixed(2)}) explose par rapport à MAE (${mae.toFixed(2)}). Si notre dataset avait beaucoup d'erreurs comme ça, MAE serait plus représentatif — mais l'analyse IQR montre que ce n'est pas notre cas (0.8% d'outliers sur la target).`;
+      cls = 'warn-box';
+    }
+    $('metric-msg').className = cls;
+    $('metric-msg').innerHTML = msg;
+
+    renderMetricCurve(x);
+  }
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* ═══════════════════════════════════════════════════
+   GRID SEARCH HEATMAP (Fiche 04)
+═══════════════════════════════════════════════════ */
+let gridAnimInterval = null;
+
+function rmseToColor(v) {
+  const { rmse } = DATA.gridSearch;
+  let min = Infinity, max = -Infinity;
+  rmse.forEach(row => row.forEach(x => { min = Math.min(min,x); max = Math.max(max,x); }));
+  const t = (v - min) / (max - min); // 0 = best (green), 1 = worst (red)
+  const hue = 145 - t * 145; // 145=green -> 0=red
+  return `hsla(${hue}, 65%, 50%, ${0.18 + t*0.12})`;
+}
+
+function buildGridHeatmap() {
+  const container = $('grid-heatmap');
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'heatmap-grid';
+
+  // Header row
+  grid.appendChild(Object.assign(document.createElement('div'), { className:'heatmap-cell head', textContent:'lr \\ depth' }));
+  DATA.gridSearch.maxDepths.forEach(d => {
+    grid.appendChild(Object.assign(document.createElement('div'), { className:'heatmap-cell head', textContent:`depth=${d}` }));
+  });
+
+  DATA.gridSearch.learningRates.forEach((lr, i) => {
+    grid.appendChild(Object.assign(document.createElement('div'), { className:'heatmap-cell head', textContent:`lr=${lr}` }));
+    DATA.gridSearch.maxDepths.forEach((d, j) => {
+      const val = DATA.gridSearch.rmse[i][j];
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      cell.id = `hm-${i}-${j}`;
+      cell.textContent = val.toFixed(2);
+      cell.style.background = rmseToColor(val);
+      grid.appendChild(cell);
+    });
+  });
+
+  container.appendChild(grid);
+}
+
+function animGridSearch() {
+  resetGridSearch();
+  const cells = [];
+  DATA.gridSearch.learningRates.forEach((lr,i) => DATA.gridSearch.maxDepths.forEach((d,j) => cells.push([i,j])));
+  let idx = 0;
+  $('grid-msg').className = 'info-box';
+  $('grid-msg').innerHTML = '<strong>GridSearchCV scanne les 12 combinaisons</strong> (ici un sous-ensemble illustratif des 72)...';
+  gridAnimInterval = setInterval(() => {
+    if (idx > 0) {
+      const [pi,pj] = cells[idx-1];
+      $(`hm-${pi}-${pj}`).classList.remove('scanning');
+    }
+    if (idx >= cells.length) {
+      clearInterval(gridAnimInterval); gridAnimInterval = null;
+      const { bestRow, bestCol, learningRates, maxDepths, rmse } = DATA.gridSearch;
+      $(`hm-${bestRow}-${bestCol}`).classList.add('best');
+      $('grid-msg').className = 'ok-box';
+      $('grid-msg').innerHTML = `<strong>Meilleure combo :</strong> learning_rate=${learningRates[bestRow]}, max_depth=${maxDepths[bestCol]} → RMSE inner ≈ ${rmse[bestRow][bestCol]} MPa. C'est cette config qui sera ré-entraînée sur le train externe complet.`;
+      return;
+    }
+    const [i,j] = cells[idx];
+    $(`hm-${i}-${j}`).classList.add('scanning');
+    idx++;
+  }, 180);
+}
+
+function resetGridSearch() {
+  if (gridAnimInterval) { clearInterval(gridAnimInterval); gridAnimInterval = null; }
+  buildGridHeatmap();
+  $('grid-msg').className = 'info-box';
+  $('grid-msg').innerHTML = "Clique sur <strong>« Scanner la grille »</strong> pour voir GridSearchCV évaluer chaque combinaison par 5-fold inner CV.";
+}
+
+/* ═══════════════════════════════════════════════════
+   CART SPLIT ANIMATION (Fiche 08)
+═══════════════════════════════════════════════════ */
+function seededRandom(seed) {
+  let s = seed;
+  return () => { s = (s*9301+49297) % 233280; return s/233280; };
+}
+
+const CART_POINTS = (() => {
+  const rnd = seededRandom(42);
+  const pts = [];
+  for (let i=0;i<40;i++) {
+    const x = rnd()*100;
+    const y = rnd()*100;
+    let cls;
+    if (x > 50 && y > 50) cls = 3;       // cement haut, age haut → forte résistance
+    else if (x > 50 && y <= 50) cls = 2; // cement haut, age bas
+    else if (x <= 50 && y > 50) cls = 1; // cement bas, age haut
+    else cls = 0;                         // cement bas, age bas → faible résistance
+    pts.push({x,y,cls});
+  }
+  return pts;
+})();
+const CART_CLASS_COLORS = ['var(--ridge)', 'var(--accent4)', 'var(--accent)', 'var(--rf)'];
+
+const CART_STEPS = [
+  { lines: [], msg: "<strong>Nœud racine :</strong> 40 observations mélangées, forte variance de résistance. CART cherche le split (feature, seuil) qui réduit le plus la variance." },
+  { lines: [{type:'v', val:50}], msg: "<strong>Split 1 — cement &lt; ~330 kg/m³ ?</strong> Sépare en deux groupes : à gauche (cement bas), à droite (cement élevé). C'est le split qui réduit le plus la variance globale." },
+  { lines: [{type:'v', val:50}, {type:'h', val:50, xmin:50, xmax:100}], msg: "<strong>Split 2 (branche droite) — age &lt; ~28 jours ?</strong> Le sous-groupe 'cement élevé' est encore hétérogène → nouveau split sur age." },
+  { lines: [{type:'v', val:50}, {type:'h', val:50, xmin:50, xmax:100}, {type:'h', val:50, xmin:0, xmax:50}], msg: "<strong>Split 3 (branche gauche) — age &lt; ~28 jours ?</strong> Même logique appliquée récursivement à gauche." },
+  { lines: [{type:'v', val:50}, {type:'h', val:50, xmin:50, xmax:100}, {type:'h', val:50, xmin:0, xmax:50}], msg: "<strong>4 feuilles = 4 prédictions constantes</strong> (moyenne du groupe). Plus de profondeur → régions plus petites → variance ↑ (overfitting si on continue trop). C'est pour ça que RF/GB limitent ou compensent la profondeur.", final: true }
+];
+let cartStep = 0;
+
+function renderCartSplit(step) {
+  const s = CART_STEPS[step];
+  const container = $('cart-split-svg');
+  container.innerHTML = '';
+  const W = 420, H = 420;
+  const M = 30;
+  const PW = W - 2*M, PH = H - 2*M;
+  function xOf(v) { return M + (v/100)*PW; }
+  function yOf(v) { return M + PH - (v/100)*PH; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto'; svg.style.maxWidth = '420px'; svg.style.display = 'block'; svg.style.margin = '0 auto';
+
+  // Frame
+  svg.appendChild(svgEl('rect', { x:M, y:M, width:PW, height:PH, fill:'none', stroke:getThemeVar('--svg-axis') }));
+  svgText(svg, 'cement →', M+PW/2, H-6, { size:11 });
+  svgText(svg, 'age →', 12, M+PH/2, { size:11, transform:`rotate(-90,12,${M+PH/2})` });
+
+  // Split lines
+  s.lines.forEach(l => {
+    if (l.type === 'v') {
+      svg.appendChild(svgEl('line', { x1:xOf(l.val), y1:M, x2:xOf(l.val), y2:M+PH, stroke:'var(--accent)', 'stroke-width':2, 'stroke-dasharray':'5 3' }));
+    } else {
+      svg.appendChild(svgEl('line', { x1:xOf(l.xmin), y1:yOf(l.val), x2:xOf(l.xmax), y2:yOf(l.val), stroke:'var(--accent)', 'stroke-width':2, 'stroke-dasharray':'5 3' }));
+    }
+  });
+
+  // Points
+  CART_POINTS.forEach(p => {
+    svg.appendChild(svgEl('circle', { cx:xOf(p.x), cy:yOf(p.y), r:4.5, fill: CART_CLASS_COLORS[p.cls], opacity: s.final ? 0.9 : 0.65 }));
+  });
+
+  // Final region labels
+  if (s.final) {
+    const regions = [
+      { x:25, y:25, label:'faible' }, { x:25, y:75, label:'moyen' },
+      { x:75, y:25, label:'moyen+' }, { x:75, y:75, label:'élevé' }
+    ];
+    regions.forEach(r => {
+      svgText(svg, r.label, xOf(r.x), yOf(r.y), { size:12, color:getThemeVar('--text'), 'font-weight':700 });
+    });
+  }
+
+  container.appendChild(svg);
+  $('cart-msg').innerHTML = s.msg;
+}
+
+function nextCartSplit() {
+  if (cartStep < CART_STEPS.length-1) cartStep++;
+  renderCartSplit(cartStep);
+}
+function resetCartSplit() { cartStep = 0; renderCartSplit(0); }
+
+/* ═══════════════════════════════════════════════════
+   BAGGING (RANDOM FOREST) — VARIANCE REDUCTION
+═══════════════════════════════════════════════════ */
+const TRUE_VALUE = 35;
+let baggingPreds = [];
+
+function regenBaggingPreds() {
+  baggingPreds = [];
+  for (let i=0;i<8;i++) {
+    baggingPreds.push(TRUE_VALUE + (Math.random()-0.5) * 30);
+  }
+}
+regenBaggingPreds();
+
+function renderBaggingSVG() {
+  const container = $('bagging-svg');
+  container.innerHTML = '';
+  const W = 560, H = 160;
+  const M = { top: 24, right: 24, bottom: 32, left: 24 };
+  const PW = W - M.left - M.right;
+  const MIN_V = 10, MAX_V = 60;
+  function xOf(v) { return M.left + (v-MIN_V)/(MAX_V-MIN_V) * PW; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto';
+
+  // Axis
+  svg.appendChild(svgEl('line', { x1:M.left, y1:H-M.bottom, x2:W-M.right, y2:H-M.bottom, stroke:getThemeVar('--svg-axis') }));
+  [10,20,30,40,50,60].forEach(v => {
+    const xx = xOf(v);
+    drawAxis(svg, xx, H-M.bottom, xx, H-M.bottom+4);
+    svgText(svg, v, xx, H-M.bottom+16, { size:10 });
+  });
+  svgText(svg, 'Résistance prédite (MPa)', M.left+PW/2, H-2, { size:10 });
+
+  // True value line
+  svg.appendChild(svgEl('line', { x1:xOf(TRUE_VALUE), y1:M.top-6, x2:xOf(TRUE_VALUE), y2:H-M.bottom, stroke:'var(--rf)', 'stroke-width':2, 'stroke-dasharray':'5 3' }));
+  svgText(svg, `vraie valeur = ${TRUE_VALUE}`, xOf(TRUE_VALUE), M.top-10, { size:10, color:'var(--rf)' });
+
+  // Individual tree predictions
+  baggingPreds.forEach((p,i) => {
+    const y = M.top + 18 + (i % 4) * 16;
+    svg.appendChild(svgEl('circle', { cx:xOf(p), cy:y, r:4.5, fill:'var(--ridge)', opacity:0.75 }));
+  });
+
+  // Average marker
+  const avg = mean(baggingPreds);
+  const yAvg = M.top + 18 + 1.5*16;
+  const d = 6;
+  const ax = xOf(avg);
+  svg.appendChild(svgEl('path', { d:`M ${ax} ${yAvg-d} L ${ax+d} ${yAvg} L ${ax} ${yAvg+d} L ${ax-d} ${yAvg} Z`, fill:'var(--accent)' }));
+  svgText(svg, `moyenne (8) = ${avg.toFixed(1)}`, ax, yAvg+22, { size:10, color:'var(--accent)' });
+
+  container.appendChild(svg);
+}
+
+function redrawBagging() { regenBaggingPreds(); renderBaggingSVG(); }
+
+/* ═══════════════════════════════════════════════════
+   GRADIENT BOOSTING — RESIDUAL SHRINKAGE ANIMATION
+═══════════════════════════════════════════════════ */
+const BOOST_BASE_RESIDUALS = [8,12,5,15,9,3,11,7];
+const BOOST_DECAY = 0.7;
+let boostStep = 0;
+
+function boostResiduals(step) {
+  return BOOST_BASE_RESIDUALS.map(r => r * Math.pow(BOOST_DECAY, step));
+}
+function boostRmse(step) {
+  const r = boostResiduals(step);
+  return Math.sqrt(mean(r.map(x=>x*x)));
+}
+
+function renderBoostStep(step) {
+  const container = $('boost-svg');
+  container.innerHTML = '';
+  const residuals = boostResiduals(step);
+  const W = 420, H = 200;
+  const M = { top: 16, right: 10, bottom: 30, left: 36 };
+  const PW = W - M.left - M.right, PH = H - M.top - M.bottom;
+  const BAR_W = PW / residuals.length * 0.6;
+  const MAXR = 16;
+
+  function xOf(i) { return M.left + (i+0.5) * PW/residuals.length; }
+  function yOf(v) { return M.top + PH - (v/MAXR)*PH; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto';
+  drawGrid(svg, M.left, M.top, PW, PH, residuals.length, 4);
+  drawAxis(svg, M.left, M.top, M.left, M.top+PH);
+  drawAxis(svg, M.left, M.top+PH, M.left+PW, M.top+PH);
+  [0,4,8,12,16].forEach(v=>{
+    const yy=yOf(v);
+    drawAxis(svg,M.left-4,yy,M.left,yy);
+    svgText(svg,v,M.left-8,yy,{anchor:'end',base:'middle',size:9});
+  });
+  svgText(svg, '|résidu| par observation (MPa)', M.left+PW/2, H-2, { size:10 });
+
+  residuals.forEach((r,i) => {
+    const x = xOf(i)-BAR_W/2, y = yOf(r), h = yOf(0)-y;
+    svg.appendChild(svgEl('rect', { x, y, width:BAR_W, height:h, rx:3, fill:'var(--gb)', opacity:0.55+0.45*(1-step/3) }));
+  });
+
+  container.appendChild(svg);
+
+  const rmse = boostRmse(step);
+  const labels = [
+    "<strong>Itération 0 :</strong> le modèle initial prédit la moyenne globale. Résidus = écarts bruts à la vraie résistance.",
+    "<strong>Itération 1 (+arbre 1, lr=0.2) :</strong> chaque arbre corrige une fraction (≈20%) du résidu de l'étape précédente.",
+    "<strong>Itération 2 (+arbre 2) :</strong> les résidus continuent de rétrécir — chaque arbre se concentre sur les erreurs restantes.",
+    "<strong>Itération 3 (+arbre 3 ... jusqu'à 300) :</strong> après 300 arbres, les résidus sont très faibles → RMSE final = 4.208 MPa."
+  ];
+  $('boost-msg').innerHTML = `${labels[step]} RMSE résiduel ≈ <strong>${rmse.toFixed(2)} MPa</strong>.`;
+}
+
+function nextBoostStep() {
+  if (boostStep < 3) boostStep++;
+  renderBoostStep(boostStep);
+}
+function resetBoost() { boostStep = 0; renderBoostStep(0); }
+
+/* ═══════════════════════════════════════════════════
+   PARTIAL DEPENDENCE — RÉSISTANCE vs ÂGE (Fiche 10)
+═══════════════════════════════════════════════════ */
+function gbStrengthAtAge(age) {
+  return 20 + 20 * Math.log10(age+1) / Math.log10(366);
+}
+function ridgeStrengthAtAge(age) {
+  const a1 = gbStrengthAtAge(1), a365 = gbStrengthAtAge(365);
+  return a1 + (a365-a1) * (age-1)/364;
+}
+
+function renderPDP() {
+  const container = $('pdp-svg');
+  container.innerHTML = '';
+  const W = 640, H = 280;
+  const M = { top: 20, right: 110, bottom: 40, left: 50 };
+  const PW = W - M.left - M.right, PH = H - M.top - M.bottom;
+
+  function xOf(age) { return M.left + (Math.log10(age) / Math.log10(365)) * PW; }
+  function yOf(s) { return M.top + PH - ((s-15)/(45-15)) * PH; }
+
+  const svg = makeSVG(W, H);
+  svg.style.width = '100%'; svg.style.height = 'auto';
+  drawGrid(svg, M.left, M.top, PW, PH, 5, 5);
+  drawAxis(svg, M.left, M.top, M.left, M.top+PH);
+  drawAxis(svg, M.left, M.top+PH, M.left+PW, M.top+PH);
+
+  [15,20,25,30,35,40,45].forEach(v=>{
+    const yy=yOf(v);
+    drawAxis(svg,M.left-4,yy,M.left,yy);
+    svgText(svg,v,M.left-8,yy,{anchor:'end',base:'middle',size:10});
+  });
+  [1,7,28,90,365].forEach(a=>{
+    const xx=xOf(a);
+    drawAxis(svg,xx,M.top+PH,xx,M.top+PH+4);
+    svgText(svg,a,xx,M.top+PH+15,{size:10});
+  });
+  svgText(svg, 'Résistance prédite (MPa)', 14, M.top+PH/2, { anchor:'middle', base:'middle', size:11, transform:`rotate(-90,14,${M.top+PH/2})` });
+  svgText(svg, 'Âge (jours, échelle log)', M.left+PW/2, H-4, { size:11 });
+
+  const N = 100, pathsGB=[], pathsRidge=[];
+  for (let i=0;i<=N;i++) {
+    const age = Math.pow(10, Math.log10(365)*i/N);
+    pathsGB.push(`${xOf(age)},${yOf(gbStrengthAtAge(age))}`);
+    pathsRidge.push(`${xOf(age)},${yOf(ridgeStrengthAtAge(age))}`);
+  }
+  svg.appendChild(svgEl('path', { d:'M '+pathsGB.join(' L '), stroke:'var(--gb)', 'stroke-width':2.5, fill:'none' }));
+  svg.appendChild(svgEl('path', { d:'M '+pathsRidge.join(' L '), stroke:'var(--ridge)', 'stroke-width':2.5, 'stroke-dasharray':'6 4', fill:'none' }));
+
+  svgText(svg, 'GB — capture log(age)', M.left+PW+8, yOf(gbStrengthAtAge(365)), { anchor:'start', size:11, color:'var(--gb)' });
+  svgText(svg, 'Ridge — droite (biais)', M.left+PW+8, yOf(ridgeStrengthAtAge(365))+14, { anchor:'start', size:11, color:'var(--ridge)' });
+
+  container.appendChild(svg);
+}
+
+/* ═══════════════════════════════════════════════════
    EXPOSE GLOBAL HANDLERS (onclick in HTML)
 ═══════════════════════════════════════════════════ */
 window.nextFold      = nextFold;
@@ -819,6 +1405,13 @@ window.prevNestedStep= prevNestedStep;
 window.resetNested   = resetNested;
 window.animLeakage   = animLeakage;
 window.renderImportanceBars = renderImportanceBars;
+window.animGridSearch  = animGridSearch;
+window.resetGridSearch = resetGridSearch;
+window.nextCartSplit   = nextCartSplit;
+window.resetCartSplit  = resetCartSplit;
+window.redrawBagging   = redrawBagging;
+window.nextBoostStep   = nextBoostStep;
+window.resetBoost      = resetBoost;
 
 /* ═══════════════════════════════════════════════════
    INIT
@@ -826,12 +1419,19 @@ window.renderImportanceBars = renderImportanceBars;
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNav();
+  initComplexitySlider();
+  initMetricSlider();
   initRidgeSlider();
   initCVGrid();
   renderCVFold(0);
+  resetGridSearch();
   renderNestedStep();
+  renderCartSplit(0);
+  renderBaggingSVG();
+  renderBoostStep(0);
   renderLeakStep(0);
   renderImportanceBars('gb');
+  renderPDP();
   renderComparisonChart();
   renderR2Chart();
 });

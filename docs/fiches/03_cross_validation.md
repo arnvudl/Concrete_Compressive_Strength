@@ -2,6 +2,8 @@
 
 > Synthèse 4 — Comment estimer l'erreur de généralisation quand on n'a pas de données infinies ?
 
+> 📌 **Cette fiche = la brique de base.** Dans ce projet, on n'utilise jamais une simple CV "toute seule" — on utilise la **nested CV** ([Fiche 05](05_nested_cv.md)), qui est constituée de **deux K-fold CV imbriqués** (une boucle outer + une boucle inner). Cette fiche explique le mécanisme d'**un seul** K-fold CV : comment ça marche, pourquoi 5 folds, pourquoi `shuffle=True`, etc. Comprendre ça d'abord est indispensable pour comprendre comment les deux boucles s'assemblent dans la fiche 05.
+
 ---
 
 ## Le Problème : Un Seul Split, c'est Insuffisant
