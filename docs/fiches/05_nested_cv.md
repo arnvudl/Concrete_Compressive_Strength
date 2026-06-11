@@ -12,6 +12,17 @@ Scénario : tu testes 72 combinaisons d'hyperparamètres avec une 5-fold CV. Tu 
 
 **Pourquoi ?** Tu ne prends pas la *moyenne* des 72 scores — tu prends le **minimum**. Le minimum d'une distribution bruitée est *toujours* trop bas par chance.
 
+### Mais pourquoi ces scores sont-ils "bruités" ?
+
+Chaque score (RMSE) d'un fold est calculé sur un **échantillon fini et aléatoire** — pas sur la vraie distribution infinie de bétons possibles. Ce score dépend de :
+
+- **quelles observations précises sont tombées dans ce fold de test** — par hasard, certaines combinaisons de béton sont "plus faciles" à prédire que d'autres
+- **du bruit irréductible** ($\sigma^2_\epsilon$, [Fiche 01](01_erreur_generalisation.md)) inhérent aux données — deux gâchées identiques n'ont jamais exactement la même résistance
+
+→ Si tu refais le même découpage avec un `random_state` différent, le score change un peu, **même avec exactement les mêmes hyperparamètres**. Le score observé = **vraie performance de la config ± un peu de hasard d'échantillonnage**.
+
+**Conséquence pour le tuning :** quand GridSearchCV teste 72 configs, chacune reçoit un score = $\text{vraie\_perf}(\text{config}) \pm \text{bruit}$. Si tu choisis le **minimum** parmi 72 valeurs bruitées, tu as de bonnes chances de tomber sur une config dont le bruit était **favorable par hasard** — pas forcément la meilleure config "en vérité". C'est exactement le mécanisme de la loot box ci-dessous.
+
 ---
 
 ## L'Analogie de la Loot Box (Synthèse 10)
@@ -116,12 +127,25 @@ La boucle externe évalue **cet algorithme complet**, pas juste le modèle final
 
 ---
 
-## Coût Computationnel
+## Coût Computationnel : Splits vs Entraînements
 
-Pour 1 modèle (ex. GB, 72 combos) :
-$$5 \text{ folds outer} \times 5 \text{ folds inner} \times 72 \text{ combos} = \mathbf{1800} \text{ entraînements}$$
+**Important : il n'y a qu'UN SEUL processus (la nested CV), pas "une CV puis une nested CV séparée".** L'outer CV n'est pas une étape à part — c'est elle-même une cross-validation (5-fold), à l'intérieur de laquelle on lance une seconde CV (l'inner) pour le tuning. "Nested CV" = le nom du processus complet à deux boucles, pas une étape supplémentaire après une CV simple.
 
-Pour 3 modèles : ~5000+ entraînements → c'est pour ça qu'on utilise `n_jobs=-1` (parallélisation CPU) et des grilles compactes.
+À ne pas confondre :
+- **Splits du dataset** (= découpages générés par `KFold(5)`) : il y en a très peu — 5 splits outer + 5 splits inner par fold outer (= 25 splits inner) = **30 splits au total par modèle**, et ces mêmes splits sont **réutilisés** pour toutes les configurations d'hyperparamètres.
+- **Entraînements (fits)** : chaque combinaison d'hyperparamètres est entraînée sur chacun de ces splits → c'est ce nombre qui est grand.
+
+$$\text{Entraînements} = 5 \text{ folds outer} \times 5 \text{ folds inner} \times \text{nb combos}$$
+
+| Modèle | Combos testées | Entraînements (5 × 5 × combos) |
+|---|---|---|
+| Ridge | 7 (`alpha`) | 175 |
+| Random Forest | 72 (3×4×3×2) | 1 800 |
+| Gradient Boosting | 72 (3×4×3×2) | 1 800 |
+| + Refit final GB (sur 100% des données, 5-fold inner) | 72 | 360 |
+| **Total** | | **≈ 4 135** |
+
+→ ~4 100 entraînements au total, pas 15 000 — d'où l'utilité de `n_jobs=-1` (parallélisation CPU) et de grilles compactes (≤ 72 combos).
 
 ---
 
